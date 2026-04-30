@@ -71,16 +71,24 @@ https://jtotlqxlsjeiqmklbhmj.supabase.co/functions/v1
 ```bash
 DESKTOP_CAT_API_URL=https://<project-ref>.supabase.co/functions/v1
 DESKTOP_CAT_VISION_URL=https://<project-ref>.supabase.co/functions/v1/analyze-screen
+DESKTOP_CAT_OPEN_DEVTOOLS=false
 ```
+
+开发模式默认会为 Dashboard 打开独立 DevTools 窗口，方便看请求和控制台日志；需要临时关闭时设置 `DESKTOP_CAT_OPEN_DEVTOOLS=false`。
 
 ## Secrets
 
-必需：
+Supabase 基础必填：
 
 ```bash
 SUPABASE_URL=...
 SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
+```
+
+Gemini Vision 必填：
+
+```bash
 GCP_PROJECT_ID=...
 GCP_PRIVATE_KEY=...
 GCP_CLIENT_EMAIL=...
@@ -88,7 +96,7 @@ VERTEX_LOCATION=global
 VISION_MODEL=gemini-3.1-flash-preview
 ```
 
-支付可选；缺失时 `/payment/create` 返回 `PAYMENT_NOT_CONFIGURED`，其他功能照常可用：
+易支付可选；缺失时 `/payment/create` 返回 `PAYMENT_NOT_CONFIGURED`，其他功能照常可用：
 
 ```bash
 EPAY_PID=...

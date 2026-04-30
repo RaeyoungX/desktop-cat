@@ -21,6 +21,7 @@ import { createTrayNativeImage } from "./tray-icon";
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const rootDir = isDev ? path.join(__dirname, "../..") : path.join(__dirname, "../../..");
+const openDevTools = isDev && process.env.DESKTOP_CAT_OPEN_DEVTOOLS !== "false";
 
 let catWindow: BrowserWindow | null = null;
 let dashboardWindow: BrowserWindow | null = null;
@@ -130,6 +131,13 @@ function createDashboard(): void {
   });
 
   void dashboardWindow.loadURL(rendererUrl());
+  if (openDevTools) {
+    dashboardWindow.webContents.once("did-finish-load", () => {
+      if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+        dashboardWindow.webContents.openDevTools({ mode: "detach" });
+      }
+    });
+  }
   dashboardWindow.on("closed", () => {
     dashboardWindow = null;
   });
