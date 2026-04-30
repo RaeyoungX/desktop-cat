@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ActiveSession, FocusSession, TimelineEntry, TodayTask } from "../../src/shared/types";
+import type { BillingCycle, PaymentMethod, PlanId } from "../../src/shared/cloud";
 
 type Listener<T> = (payload: T) => void;
 
@@ -37,6 +38,35 @@ const api = {
     closeDashboard: (): void => ipcRenderer.send("app:close-dashboard"),
     openDashboard: (): void => ipcRenderer.send("app:open-dashboard"),
     quit: (): void => ipcRenderer.send("app:quit"),
+  },
+  auth: {
+    session: (): Promise<unknown> => ipcRenderer.invoke("auth:session"),
+    signup: (payload: { email: string; password: string }): Promise<unknown> => ipcRenderer.invoke("auth:signup", payload),
+    signin: (payload: { email: string; password: string }): Promise<unknown> => ipcRenderer.invoke("auth:signin", payload),
+    signout: (): Promise<unknown> => ipcRenderer.invoke("auth:signout"),
+    refresh: (): Promise<unknown> => ipcRenderer.invoke("auth:refresh"),
+    me: (): Promise<unknown> => ipcRenderer.invoke("auth:me"),
+  },
+  cloud: {
+    getApiBase: (): Promise<string> => ipcRenderer.invoke("cloud:get-api-base"),
+    getQuota: (): Promise<unknown> => ipcRenderer.invoke("cloud:quota"),
+    syncSessions: (sessions: FocusSession[]): Promise<unknown> => ipcRenderer.invoke("cloud:sync-sessions", sessions),
+    syncStats: (stats: { points: number; total_sessions: number; total_mins: number }): Promise<unknown> => ipcRenderer.invoke("cloud:sync-stats", stats),
+    getLeaderboard: (limit = 10): Promise<unknown> => ipcRenderer.invoke("cloud:leaderboard", limit),
+    onChanged: (cb: Listener<unknown>): (() => void) => onChannel("cloud:changed", cb),
+  },
+  billing: {
+    getPlans: (): Promise<unknown> => ipcRenderer.invoke("billing:plans"),
+    getSubscription: (): Promise<unknown> => ipcRenderer.invoke("billing:subscription"),
+    createPayment: (payload: { plan_id: PlanId; billing: BillingCycle; payment_method: PaymentMethod }): Promise<unknown> =>
+      ipcRenderer.invoke("billing:create-payment", payload),
+    getOrder: (orderId: string): Promise<unknown> => ipcRenderer.invoke("billing:order", orderId),
+  },
+  shopCloud: {
+    getItems: (): Promise<unknown> => ipcRenderer.invoke("shop:items"),
+    getInventory: (): Promise<unknown> => ipcRenderer.invoke("shop:inventory"),
+    buy: (itemId: string): Promise<unknown> => ipcRenderer.invoke("shop:buy", itemId),
+    equip: (itemId: string, action: "equip" | "unequip"): Promise<unknown> => ipcRenderer.invoke("shop:equip", { itemId, action }),
   },
   events: {
     onDistractDetected: (cb: Listener<number>): (() => void) => onChannel("session:distract-detected", cb),

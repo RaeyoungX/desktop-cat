@@ -1,4 +1,5 @@
 import type { VisionResult, FocusStatus } from "../../src/shared/types";
+import { getApiBaseUrl } from "./store";
 
 function normalizeStatus(value: unknown): FocusStatus {
   return value === "focused" || value === "distracted" || value === "uncertain"
@@ -26,6 +27,7 @@ export function normalizeVisionPayload(payload: unknown): VisionResult {
 
 export type AnalyzeScreenInput = {
   endpoint: string;
+  apiEndpoint?: string;
   accessToken?: string;
   screenshotBase64: string;
   mimeType: string;
@@ -73,5 +75,23 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
     };
   }
 
-  return normalizeVisionPayload(await response.json());
+  const payload = await response.json();
+  if (payload && typeof payload === "object" && "ok" in payload) {
+    const wrapped = payload as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
+    if (!wrapped.ok) {
+      return {
+        status: "uncertain",
+        confidence: 0,
+        activity: wrapped.error?.code === "QUOTA_EXCEEDED" ? "AI 额度不足" : "AI 检测暂停",
+        reason: wrapped.error?.message ?? "Vision endpoint returned an error",
+        checkId: input.checkId,
+      };
+    }
+    return normalizeVisionPayload(wrapped.data);
+  }
+  return normalizeVisionPayload(payload);
+}
+
+export function defaultVisionAnalyzeUrl(): string {
+  return `${getApiBaseUrl()}/vision/analyze`;
 }

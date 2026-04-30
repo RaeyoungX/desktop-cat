@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.105.0";
+import { hitRateLimit as hitDesktopRateLimit } from "./desktop/rate_limit.ts";
 
 export type QuotaDecision = {
   allowed: boolean;
@@ -26,6 +27,7 @@ export async function checkVisionQuota(serviceClient: SupabaseClient, userId: st
     .select("plan,status,period_end")
     .eq("user_id", userId)
     .eq("status", "active")
+    .or(`period_end.is.null,period_end.gte.${new Date().toISOString().slice(0, 10)}`)
     .order("period_end", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -59,23 +61,5 @@ export async function hitRateLimit(
   bucketKey: string,
   limit: number,
 ): Promise<boolean> {
-  const windowStart = new Date();
-  windowStart.setUTCSeconds(0, 0);
-  const { data } = await serviceClient
-    .from("rate_limit_buckets")
-    .select("hit_count")
-    .eq("bucket_key", bucketKey)
-    .eq("window_start", windowStart.toISOString())
-    .maybeSingle();
-
-  const next = Number(data?.hit_count ?? 0) + 1;
-  await serviceClient
-    .from("rate_limit_buckets")
-    .upsert({
-      bucket_key: bucketKey,
-      window_start: windowStart.toISOString(),
-      hit_count: next,
-    }, { onConflict: "bucket_key,window_start" });
-
-  return next > limit;
+  return (await hitDesktopRateLimit(serviceClient, bucketKey, limit)).limited;
 }

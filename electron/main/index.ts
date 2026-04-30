@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, screen, Tray } from 
 import path from "node:path";
 import type { ActiveSession, FocusSession, TimelineEntry, TodayTask } from "../../src/shared/types";
 import { VisionDetector } from "./detector";
+import { cloudClient } from "./cloud-client";
 import {
   addSession,
   addTimelineEntry,
@@ -11,9 +12,11 @@ import {
   getTimeline,
   getTodayTasks,
   getVisionAnalyzeUrl,
+  getApiBaseUrl,
   saveTodayTasks,
   setEquippedItems,
 } from "./store";
+import { defaultVisionAnalyzeUrl } from "./vision-client";
 import { createTrayNativeImage } from "./tray-icon";
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
@@ -164,10 +167,25 @@ function distractMsg(count: number): string {
 
 const detector = new VisionDetector({
   getAccessToken: () => getAuthSession()?.access_token,
-  getEndpoint: () => getVisionAnalyzeUrl(),
+  getEndpoint: () => getVisionAnalyzeUrl() || defaultVisionAnalyzeUrl(),
   onActivity: (entry: TimelineEntry) => {
     addTimelineEntry(entry);
     sendToDashboard("session:timeline-entry", entry);
+  },
+  onAnalyzed: async (result, sessionId) => {
+    if (!getAuthSession()?.access_token) return;
+    const reported = await cloudClient.reportQuota({
+      session_id: sessionId,
+      duration_seconds: 30,
+      status: result.status,
+      activity: result.activity,
+    });
+    if (!reported.ok) {
+      sendToDashboard("cloud:changed", { quotaError: reported.error?.message ?? "额度上报失败" });
+      if (reported.error?.code === "QUOTA_EXCEEDED") {
+        sendToDashboard("session:detector-status", reported.error.message);
+      }
+    }
   },
   onDistracted: (count) => {
     const cursor = screen.getCursorScreenPoint();
@@ -225,6 +243,12 @@ async function endSession(): Promise<FocusSession | null> {
   };
 
   addSession(session);
+  void cloudClient.syncSessions([session]).then((result) => {
+    sendToDashboard("cloud:changed", {
+      sync: result.ok ? "synced" : "failed",
+      message: result.ok ? "云同步完成" : result.error?.message ?? "云同步失败",
+    });
+  });
   currentSession = null;
   updateTrayMenu();
   sendToDashboard("session:changed", null);
@@ -282,6 +306,40 @@ function registerIpc(): void {
   ipcMain.on("app:close-dashboard", () => dashboardWindow?.close());
   ipcMain.on("app:open-dashboard", () => createDashboard());
   ipcMain.on("app:quit", () => app.quit());
+
+  ipcMain.handle("cloud:get-api-base", () => getApiBaseUrl());
+  ipcMain.handle("auth:session", () => cloudClient.getAuthSession());
+  ipcMain.handle("auth:signup", (_, payload: { email: string; password: string }) => cloudClient.signup(payload.email, payload.password));
+  ipcMain.handle("auth:signin", (_, payload: { email: string; password: string }) => cloudClient.signin(payload.email, payload.password));
+  ipcMain.handle("auth:signout", () => cloudClient.signout());
+  ipcMain.handle("auth:refresh", () => cloudClient.refresh());
+  ipcMain.handle("auth:me", () => cloudClient.me());
+  ipcMain.handle("cloud:quota", () => cloudClient.getQuota());
+  ipcMain.handle("cloud:sync-sessions", (_, sessions) => cloudClient.syncSessions(sessions));
+  ipcMain.handle("cloud:sync-stats", (_, stats) => cloudClient.syncStats(stats));
+  ipcMain.handle("cloud:leaderboard", (_, limit: number) => cloudClient.getLeaderboard(limit));
+  ipcMain.handle("billing:plans", () => cloudClient.getPlans());
+  ipcMain.handle("billing:subscription", () => cloudClient.getSubscription());
+  ipcMain.handle("billing:create-payment", (_, payload) => cloudClient.createPayment(payload));
+  ipcMain.handle("billing:order", (_, orderId: string) => cloudClient.getOrder(orderId));
+  ipcMain.handle("shop:items", () => cloudClient.getShopItems());
+  ipcMain.handle("shop:inventory", () => cloudClient.getInventory());
+  ipcMain.handle("shop:buy", (_, itemId: string) => cloudClient.buyItem(itemId));
+  ipcMain.handle("shop:equip", async (_, payload: { itemId: string; action: "equip" | "unequip" }) => {
+    const result = await cloudClient.equipItem(payload.itemId, payload.action);
+    if (result.ok && result.data && typeof result.data === "object" && "equipped" in result.data) {
+      const equipped = (result.data as { equipped?: unknown }).equipped;
+      if (Array.isArray(equipped)) {
+        const safe = setEquippedItems(equipped.filter((item) => typeof item === "string"));
+        sendToCat("cat:equip-items", safe);
+      }
+    }
+    return result;
+  });
+
+  ipcMain.on("cloud:refresh-dashboard", () => {
+    sendToDashboard("cloud:changed", { refresh: Date.now() });
+  });
 }
 
 app.whenReady().then(() => {

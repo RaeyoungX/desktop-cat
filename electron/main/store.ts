@@ -3,10 +3,12 @@ import { todayKey } from "../../src/shared/date";
 import type { FocusSession, TimelineEntry, TodayTask } from "../../src/shared/types";
 import { loadTodayTasksFromBucket, makeTaskBucket, type TaskBucket } from "../../src/shared/tasks";
 
-type AuthSession = {
+export type AuthSession = {
   access_token?: string;
   refresh_token?: string;
   expires_at?: number;
+  email?: string;
+  user_id?: string;
   user?: {
     id: string;
     email?: string;
@@ -92,4 +94,11 @@ export function getVisionAnalyzeUrl(): string {
     || process.env.DESKTOP_CAT_VISION_URL
     || process.env.VITE_DESKTOP_CAT_VISION_URL
     || "";
+}
+
+export function getApiBaseUrl(): string {
+  return store.get("settings.apiBaseUrl")
+    || process.env.DESKTOP_CAT_API_URL
+    || process.env.VITE_DESKTOP_CAT_API_URL
+    || "https://jtotlqxlsjeiqmklbhmj.supabase.co/functions/v1";
 }

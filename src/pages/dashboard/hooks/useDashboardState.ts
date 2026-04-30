@@ -1,5 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useInterval } from "../../../hooks/useInterval";
+import {
+  CLOUD_PLANS,
+  CLOUD_SHOP_ITEMS,
+  normalizeCloudUser,
+  normalizeLeaderboardEntry,
+  normalizeOrder,
+  normalizePlan,
+  normalizeQuota,
+  normalizeShopItem,
+  normalizeSubscription,
+  type BillingCycle,
+  type CloudEnvelope,
+  type CloudPlan,
+  type CloudSubscription,
+  type CloudUser,
+  type LeaderboardEntry,
+  type PaymentMethod,
+  type PaymentOrder,
+  type PlanId,
+  type QuotaSnapshot,
+  type ShopItem,
+} from "../../../shared/cloud";
 import { buildDailyStats, buildWeekStats, sessionMinutes } from "../../../shared/stats";
 import { createTask } from "../../../shared/tasks";
 import type { ActiveSession, FocusSession, TimelineEntry, TodayTask } from "../../../shared/types";
@@ -16,6 +38,20 @@ function getPoints(sessions: FocusSession[]): number {
   return sessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
 }
 
+function unwrap<T>(payload: unknown): CloudEnvelope<T> {
+  const result = payload && typeof payload === "object" ? payload as CloudEnvelope<T> : null;
+  if (result?.ok) return result;
+  return {
+    ok: false,
+    error: result?.error ?? { code: "UNKNOWN", message: "云端请求失败" },
+  };
+}
+
+function cloudMessage(payload: unknown): string {
+  const item = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
+  return typeof item.message === "string" ? item.message : "";
+}
+
 export function useDashboardState() {
   const [tasks, setTasks] = useState<TodayTask[]>([]);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
@@ -30,6 +66,62 @@ export function useDashboardState() {
   const [now, setNow] = useState(Date.now());
   const [detectorStatus, setDetectorStatus] = useState("");
   const [equipped, setEquipped] = useState<string[]>([]);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
+  const [cloudStatus, setCloudStatus] = useState("离线可用");
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [quota, setQuota] = useState<QuotaSnapshot | null>(null);
+  const [plans, setPlans] = useState<CloudPlan[]>(CLOUD_PLANS);
+  const [subscription, setSubscription] = useState<CloudSubscription | null>(null);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("alipay");
+  const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [myRank, setMyRank] = useState<number | null>(null);
+  const [shopItems, setShopItems] = useState<ShopItem[]>(CLOUD_SHOP_ITEMS);
+  const [ownedItems, setOwnedItems] = useState<string[]>([]);
+
+  const refreshCloud = useCallback(async () => {
+    const me = unwrap<unknown>(await window.desktopCat.auth.me());
+    if (!me.ok) {
+      setCloudUser(null);
+      setQuota(null);
+      setSubscription(null);
+      setOwnedItems([]);
+      setCloudStatus(me.error?.message ?? "未登录，保留本地模式");
+      return;
+    }
+
+    const user = normalizeCloudUser(me.data);
+    setCloudUser(user);
+    setQuota(user?.quota ?? null);
+    setCloudStatus("云端已连接");
+
+    const [subPayload, inventoryPayload, leaderboardPayload] = await Promise.all([
+      window.desktopCat.billing.getSubscription(),
+      window.desktopCat.shopCloud.getInventory(),
+      window.desktopCat.cloud.getLeaderboard(10),
+    ]);
+
+    const sub = unwrap<unknown>(subPayload);
+    if (sub.ok) setSubscription(normalizeSubscription(sub.data));
+
+    const inventory = unwrap<{ owned?: string[]; equipped?: string[] }>(inventoryPayload);
+    if (inventory.ok) {
+      setOwnedItems(Array.isArray(inventory.data?.owned) ? inventory.data.owned : []);
+      if (Array.isArray(inventory.data?.equipped)) {
+        setEquipped(inventory.data.equipped);
+        await window.desktopCat.cat.equipItems(inventory.data.equipped);
+      }
+    }
+
+    const board = unwrap<{ rank?: number | null; leaderboard?: unknown[] }>(leaderboardPayload);
+    if (board.ok) {
+      setMyRank(typeof board.data?.rank === "number" ? board.data.rank : null);
+      setLeaderboard((board.data?.leaderboard ?? []).map(normalizeLeaderboardEntry));
+    }
+  }, []);
 
   useEffect(() => {
     void Promise.all([
@@ -38,12 +130,30 @@ export function useDashboardState() {
       window.desktopCat.sessions.timeline(),
       window.desktopCat.sessions.get(),
       window.desktopCat.cat.getEquipped(),
-    ]).then(([loadedTasks, loadedSessions, loadedTimeline, session, loadedEquipped]) => {
+      window.desktopCat.billing.getPlans(),
+      window.desktopCat.shopCloud.getItems(),
+      window.desktopCat.auth.session(),
+    ]).then(([loadedTasks, loadedSessions, loadedTimeline, session, loadedEquipped, planPayload, shopPayload, authSession]) => {
       setTasks(loadedTasks);
       setSessions(loadedSessions);
       setTimeline(loadedTimeline);
       setActiveSession(session);
       setEquipped(loadedEquipped);
+
+      const loadedPlans = unwrap<{ plans?: unknown[] }>(planPayload);
+      if (loadedPlans.ok && Array.isArray(loadedPlans.data?.plans)) {
+        setPlans(loadedPlans.data.plans.map(normalizePlan));
+      }
+
+      const loadedShop = unwrap<{ items?: unknown[] }>(shopPayload);
+      if (loadedShop.ok && Array.isArray(loadedShop.data?.items)) {
+        setShopItems(loadedShop.data.items.map(normalizeShopItem));
+      }
+
+      if (authSession && typeof authSession === "object" && "access_token" in authSession) {
+        void refreshCloud();
+      }
+
       if (!session) {
         const first = loadedTasks.find((task) => !task.done);
         if (first) {
@@ -63,17 +173,38 @@ export function useDashboardState() {
         void window.desktopCat.sessions.get().then(setActiveSession);
       }),
       window.desktopCat.events.onDetectorStatus(setDetectorStatus),
+      window.desktopCat.cloud.onChanged((payload) => {
+        const message = cloudMessage(payload);
+        if (message) setCloudStatus(message);
+        void refreshCloud();
+      }),
     ];
 
     return () => cleanups.forEach((cleanup) => cleanup());
-  }, []);
+  }, [refreshCloud]);
 
   useInterval(() => setNow(Date.now()), 1000);
+
+  useInterval(() => {
+    if (!paymentOrder || paymentOrder.status !== "pending") return;
+    void window.desktopCat.billing.getOrder(paymentOrder.orderId).then((payload) => {
+      const result = unwrap<unknown>(payload);
+      if (!result.ok) return;
+      const order = normalizeOrder(result.data);
+      if (!order) return;
+      setPaymentOrder(order);
+      if (order.status === "paid") {
+        setCloudStatus("支付完成，套餐已激活");
+        void refreshCloud();
+      }
+    });
+  }, paymentOrder?.status === "pending" ? 3000 : null);
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null;
   const dailyStats = useMemo(() => buildDailyStats(tasks, sessions), [tasks, sessions]);
   const weekStats = useMemo(() => buildWeekStats(sessions), [sessions]);
-  const points = getPoints(sessions);
+  const localPoints = getPoints(sessions);
+  const points = cloudUser?.stats.points ?? localPoints;
   const elapsedSeconds = activeSession ? Math.floor((now - activeSession.startTime) / 1000) : 0;
   const totalSeconds = activeSession ? activeSession.duration * 60 : duration * 60;
   const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
@@ -143,8 +274,78 @@ export function useDashboardState() {
   }
 
   async function toggleEquip(id: string) {
+    if (cloudUser) {
+      const action = equipped.includes(id) ? "unequip" : "equip";
+      const result = unwrap<{ equipped?: string[] }>(await window.desktopCat.shopCloud.equip(id, action));
+      if (result.ok && Array.isArray(result.data?.equipped)) {
+        setEquipped(result.data.equipped);
+        await window.desktopCat.cat.equipItems(result.data.equipped);
+      } else {
+        setCloudStatus(result.error?.message ?? "装备失败");
+      }
+      return;
+    }
+
     const next = equipped.includes(id) ? equipped.filter((item) => item !== id) : [...equipped, id];
     setEquipped(await window.desktopCat.cat.equipItems(next));
+  }
+
+  async function buyItem(id: string) {
+    const result = unwrap<{ owned?: string[]; points_remaining?: number }>(await window.desktopCat.shopCloud.buy(id));
+    if (!result.ok) {
+      setCloudStatus(result.error?.message ?? "购买失败");
+      return;
+    }
+    if (Array.isArray(result.data?.owned)) setOwnedItems(result.data.owned);
+    setCloudStatus("购买成功");
+    await refreshCloud();
+  }
+
+  async function signIn(mode: "signin" | "signup") {
+    setCloudBusy(true);
+    const result = unwrap<unknown>(
+      mode === "signin"
+        ? await window.desktopCat.auth.signin({ email: authEmail, password: authPassword })
+        : await window.desktopCat.auth.signup({ email: authEmail, password: authPassword }),
+    );
+    setCloudBusy(false);
+    if (!result.ok) {
+      setCloudStatus(result.error?.message ?? "登录失败");
+      return;
+    }
+    setAuthPassword("");
+    setCloudStatus(mode === "signin" ? "登录成功" : "注册成功");
+    await refreshCloud();
+  }
+
+  async function signOut() {
+    await window.desktopCat.auth.signout();
+    setCloudUser(null);
+    setQuota(null);
+    setSubscription(null);
+    setOwnedItems([]);
+    setCloudStatus("已退出云端账号，本地模式继续可用");
+  }
+
+  async function createPayment(planId: PlanId) {
+    setCloudBusy(true);
+    const result = unwrap<unknown>(await window.desktopCat.billing.createPayment({
+      plan_id: planId,
+      billing: billingCycle,
+      payment_method: paymentMethod,
+    }));
+    setCloudBusy(false);
+    if (!result.ok) {
+      setCloudStatus(result.error?.message ?? "创建订单失败");
+      return;
+    }
+    const order = normalizeOrder(result.data);
+    setPaymentOrder(order);
+    setCloudStatus(order ? "订单已创建，等待支付" : "订单创建失败");
+  }
+
+  function closePayment() {
+    setPaymentOrder(null);
   }
 
   useEffect(() => {
@@ -156,32 +357,57 @@ export function useDashboardState() {
   return {
     activeSession,
     activeTab,
+    authEmail,
+    authPassword,
+    billingCycle,
+    cloudBusy,
+    cloudStatus,
+    cloudUser,
     customDuration,
     dailyStats,
     detectorStatus,
     duration,
     equipped,
     focusName,
+    leaderboard,
+    myRank,
     newTaskText,
+    ownedItems,
+    paymentMethod,
+    paymentOrder,
+    plans,
     points,
     progress,
+    quota,
     remainingSeconds,
     selectedTask,
     selectedTaskId,
     sessions,
+    shopItems,
+    subscription,
     tasks,
     timeline,
     weekStats,
     addTask,
+    buyItem,
+    closePayment,
+    createPayment,
     finishSession,
     pickTask,
+    refreshCloud,
     removeTask,
     setActiveTab,
+    setAuthEmail,
+    setAuthPassword,
+    setBillingCycle,
     setCustomDuration,
     setDuration,
     setFocusName,
     setNewTaskText,
+    setPaymentMethod,
     setSelectedTaskId,
+    signIn,
+    signOut,
     startFocus,
     toggleEquip,
     toggleTask,

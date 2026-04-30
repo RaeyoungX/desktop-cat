@@ -1,4 +1,4 @@
-import { BarChart2, ListTodo, PawPrint, Star } from "lucide-react";
+import { BarChart2, CreditCard, ListTodo, PawPrint, ShoppingBag, Trophy } from "lucide-react";
 import type { DashboardTab } from "../constants";
 
 type DashboardTabsProps = {
@@ -9,7 +9,9 @@ type DashboardTabsProps = {
 const TABS = [
   { key: "tasks", label: "任务", Icon: ListTodo },
   { key: "summary", label: "总结", Icon: BarChart2 },
-  { key: "shop", label: "装扮", Icon: Star },
+  { key: "shop", label: "商店", Icon: ShoppingBag },
+  { key: "subscription", label: "订阅", Icon: CreditCard },
+  { key: "leaderboard", label: "排行", Icon: Trophy },
   { key: "profile", label: "我的", Icon: PawPrint },
 ] satisfies Array<{ key: DashboardTab; label: string; Icon: typeof ListTodo }>;
 

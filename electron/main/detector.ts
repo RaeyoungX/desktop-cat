@@ -47,6 +47,7 @@ export type DetectorCallbacks = {
   onDistracted?: (count: number, result: VisionResult) => void;
   onFocused?: (result: VisionResult) => void;
   onStatus?: (message: string) => void;
+  onAnalyzed?: (result: VisionResult, sessionId: string) => void | Promise<void>;
 };
 
 export type DetectorOptions = DetectorCallbacks & {
@@ -145,6 +146,7 @@ export class VisionDetector {
       activity: result.activity,
       reason: result.reason,
     });
+    void this.options.onAnalyzed?.(result, this.sessionId);
 
     const next = applyVisionResult(this.state, result.status);
     this.state = {
