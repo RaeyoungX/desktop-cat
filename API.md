@@ -1,12 +1,21 @@
 # Desktop Cat 后端接口文档
 
 **版本**：v1.0  
-**栈**：Node.js 22 LTS · Hono · Zod · Redis · Supabase · Pino  
-**Base URL**：`https://api.desktopcat.app/v1`
+**栈**：Supabase Edge Functions（Deno · TypeScript）· Zod · Supabase Postgres & Auth  
+**Base URL**：以部署为准。**示例**：`https://api.desktopcat.app/v1`（自定义域反代至 Functions）；或直接 `https://<PROJECT_REF>.supabase.co/functions/v1/<edge-function>/v1`。**下文路径均为该 Base URL 之后的相对路径**。
 
 ---
 
 ## 通用约定
+
+### Edge Functions 与路由
+
+- **服务端**：全部为 **Supabase Edge Functions**，**不再使用 Hono / 自建 Node HTTP 进程**。
+- **路由**：以下 `POST /auth/signup`、`GET /user/me` 等语义路径，实现上可选用 **单个网关 Function**（内部分发子路径）、或 **按域拆分多个 Function**（由反向代理拼装统一前缀）。
+- **数据库**：读写 **Supabase Postgres**；需在 Functions 中使用 **Service Role** 的路径（如付费 Webhook 写订阅）必须服务端校验签名后执行，密钥仅存 **Edge Secrets**。
+- **校验**：推荐使用 **Zod** 解析 Body / Query。
+- **敏感配置**：`GEMINI_API_KEY`、`EPAY_PID`、`EPAY_KEY`、`EPAY_GATEWAY` 等通过 **Supabase Dashboard → Edge Functions → Secrets**（或 `supabase secrets set`）注入，在 Function 内 `Deno.env.get(...)` 读取。
+- **日志**：使用 `console` / Deno 标准输出或 Supabase 仪表盘日志；**禁止**在日志中输出截图、任务全文、支付验签原文。
 
 ### 请求头
 
@@ -35,19 +44,21 @@
 | `QUOTA_EXCEEDED` | 402 | AI 检测月度额度已用完 |
 | `PLAN_REQUIRED` | 402 | 需要付费套餐 |
 | `NOT_FOUND` | 404 | 资源不存在 |
-| `RATE_LIMITED` | 429 | 请求过频（Redis 限流） |
+| `RATE_LIMITED` | 429 | 请求过频（PostgreSQL `rate_limit_buckets` 计数） |
 | `ORDER_NOT_FOUND` | 404 | 订单不存在 |
 | `PAYMENT_FAILED` | 400 | 支付失败 |
 | `INTERNAL_ERROR` | 500 | 服务器内部错误 |
 
-### 限流策略（Redis）
+### 限流策略（Supabase / Postgres）
 
 | 接口类型 | 限制 |
 |---------|------|
 | 登录/注册 | 10次/分钟/IP |
 | 一般接口 | 60次/分钟/用户 |
-| AI 检测上报 | 4次/分钟/用户（30秒间隔保护）|
+| AI 检测上报 | 4次/分钟/用户（30秒间隔可由业务逻辑与 `sessions`/`quota_usage` 共同约束） |
 | 支付创建 | 5次/分钟/用户 |
+
+实现：**不引入 Redis**。在 `rate_limit_buckets` 表中按 **`bucket_key` + `window_start`** 累加计数（或由 Edge Function 调用 **RPC/SQL** 单行 upsert）；窗口通常为 **对齐到日历分钟**，详见 §十。超限返回 `429 RATE_LIMITED`。限流计数读写均在 **Functions** 内通过 **Supabase 服务端密钥**访问 Postgres。
 
 ---
 
@@ -192,7 +203,7 @@ Authorization: Bearer <jwt>
 
 ### 3.1 上报一次 AI 检测用量
 
-每次截图分析完成后客户端调用，后端记录用量并更新 Redis 缓存。
+每次截图分析完成后客户端调用；**Edge Function** 内 **UPSERT `quota_usage`**（累加当月 `used_seconds`），再结合套餐计算剩余额度。**单一事实来源**：Postgres（`quota_usage` + `subscriptions` / `plans`），不写旁路缓存。
 
 ```
 POST /quota/report
@@ -259,7 +270,7 @@ Authorization: Bearer <jwt>
 }
 ```
 
-> **缓存**：余额从 Redis 读取（TTL 5分钟），避免频繁查 DB。
+> **数据**：直接从 `quota_usage` 与用户当前套餐推导；可选用 **同一 Edge Function isolate 内的短 TTL 内存**，仍不引入 Redis。
 
 ---
 
@@ -404,9 +415,13 @@ Authorization: Bearer <jwt>
 
 ---
 
-## 六、支付（支付宝 & 微信支付）
+## 六、支付（易支付聚合：对外统一网关）
 
-### 6.1 创建支付订单
+**收银约定**：不向公网暴露「支付宝开放平台 / 微信支付开放平台」的官方异步回调地址。**支付宝扫码与微信支付均由易支付（或等价四方聚合）代收**；**Edge Function** 只与聚合 **API（下单）** 与 **`POST /payment/webhook/epay`（异步通知）** 交互。客户端请求的 `payment_method: "alipay" | "wechat"` **仅映射到聚合侧支付方式**（`type`/通道枚举以实现商字段为准）。
+
+---
+
+### 6.1 创建支付订单（Edge Function 请求易支付下单）
 
 ```
 POST /payment/create
@@ -414,6 +429,7 @@ Authorization: Bearer <jwt>
 ```
 
 **Body**
+
 ```json
 {
   "plan_id": "pro",
@@ -422,7 +438,19 @@ Authorization: Bearer <jwt>
 }
 ```
 
+| 字段 | 说明 |
+|------|------|
+| `payment_method` | `alipay` \| `wechat`。对应用户在聚合收银台打开的 **支付宝 / 微信**，非直连蚂蚁/腾讯开放平台。 |
+
+**处理流程（Edge Function）**
+
+1. 创建 `orders` 记录：`pending`，金额为套餐现价快照。
+2. 以 `orders.id`（如 `CAT20260429001`）作为 **`out_trade_no`**。
+3. **Edge Function** 通过 **`fetch`** 请求易支付 **提交订单**接口（`EPAY_GATEWAY`）：`pid`、`key` 参与签名、`money`、`type`/`payment_method` 映射、`notify_url`（公网 HTTPS → `POST /payment/webhook/epay`）、可选 `return_url`、`out_trade_no`。**商户密钥不落客户端**。
+4. 将上游返回的 **二维码图片 URL、跳转链接、`urlscheme`、`qrimg` 原文**等统一归入响应字段 **`pay_url`**（见下）。
+
 **Response**
+
 ```json
 {
   "ok": true,
@@ -431,13 +459,15 @@ Authorization: Bearer <jwt>
     "amount": 148,
     "currency": "CNY",
     "payment_method": "alipay",
-    "qr_code_url": "https://qr.alipay.com/...",
+    "pay_url": "https://pay.example-gateway.com/submit?id=...",
     "expires_at": "2026-04-29T13:30:00Z"
   }
 }
 ```
 
-> `payment_method` 可选值：`alipay` | `wechat`
+| 字段 | 说明 |
+|------|------|
+| `pay_url` | 用户完成支付所需入口：可展示为二维码、或 `shell.openExternal` 打开；**取代**原直连场景下的 `qr_code_url` 语义。若需兼容旧客户端，可在 JSON 响应中额外返回 `qr_code_url`，与 `pay_url` **同值**。 |
 
 ---
 
@@ -449,6 +479,7 @@ Authorization: Bearer <jwt>
 ```
 
 **Response**
+
 ```json
 {
   "ok": true,
@@ -465,57 +496,56 @@ Authorization: Bearer <jwt>
 | status | 含义 |
 |--------|------|
 | `pending` | 待支付 |
-| `paid` | 已支付，订阅已激活 |
-| `expired` | 二维码已过期 |
-| `failed` | 支付失败 |
+| `paid` | 已支付，订阅已通过 Edge Function / Postgres 落库激活 |
+| `expired` | 订单超时未付 |
+| `failed` | 支付失败 / 聚合关单 |
 | `refunded` | 已退款 |
 
-> 客户端每 3 秒轮询一次，最长轮询 10 分钟；收到 `paid` 后刷新本地 plan 状态。
+> 客户端可每 3 秒轮询，最长约 10 分钟；收到 `paid` 后刷新 `GET /user/me` 或 `GET /quota/status`。
 
 ---
 
-### 6.3 支付宝异步回调（Webhook）
+### 6.3 易支付异步通知（Webhook）
 
 ```
-POST /payment/webhook/alipay
+POST /payment/webhook/epay
 ```
 
-> 由支付宝服务端主动调用，无需鉴权 JWT，用签名验证合法性。
+无需 JWT。由 **易支付**在用户支付完成后通知；**不再提供** `POST /payment/webhook/alipay`、`POST /payment/webhook/wechat`（支付宝/微信官方回调由聚合商对接，非本 API 表面路径）。
 
-**Body（支付宝标准参数）**
-```
-out_trade_no=CAT20260429001&trade_status=TRADE_SUCCESS&sign=...
-```
+**请求体**
 
-**处理逻辑**：
-1. 验证支付宝签名
-2. 校验 `out_trade_no` 对应订单存在且 `amount` 匹配
-3. Redis 防重放：`SET webhook:alipay:{trade_no} 1 EX 86400`，已处理则直接返回 `success`
-4. 更新 Supabase `subscriptions` 表，激活套餐
-5. 重置当月 AI 额度缓存
-6. 返回字符串 `success`
+- `Content-Type`、字段名（如 `out_trade_no`、`money`、`trade_status`、`sign`）以实现商文档为准，常见为 **`application/x-www-form-urlencoded`**。
+- 验签前不得采信金额与成功状态。
+
+**处理逻辑**
+
+1. 按实现商规则 **验签**。
+2. `out_trade_no` → `orders.id`：存在、`status === pending`、金额与订单 **一致**（注意分/元与精度）。
+3. **幂等**：`INSERT INTO epay_webhook_dedupe (out_trade_no) VALUES (...)`；若主键冲突则 **直接返回** `success`（易支付重试不再改库）。
+4. 支付成功：更新 `orders`（`paid`、`paid_at`），写/更新 `subscriptions`（`active`、周期）；**按 `quota_usage` 与套餐规则重算**当月可用 AI 秒数（仍仅写回 Postgres，无外部 KV）。
+5. 响应体为 **纯文本** `success`（或实现商要求的固定串），避免非约定格式触发对方重试风暴。
+
+**环境变量（示例）**
+
+`EPAY_PID`、`EPAY_KEY`、`EPAY_GATEWAY`、`EPAY_NOTIFY_URL`（与商户后台「异步通知地址」完全一致）。
 
 ---
 
-### 6.4 微信支付回调（Webhook）
+### 6.4 Gemini Vision 代理（与本节支付并列，密钥不落客户端）
+
+桌面端 **不得** 携带 Gemini API Key。**Edge Function** 在已通过 JWT 鉴权、且用户仍有 AI 额度时响应：
 
 ```
-POST /payment/webhook/wechat
+POST /vision/analyze
+Authorization: Bearer <jwt>
 ```
 
-**Body（微信 JSON 通知）**
-```json
-{
-  "out_trade_no": "CAT20260429001",
-  "trade_state": "SUCCESS",
-  "sign": "..."
-}
-```
+请求体沿用产品技术方案：**压缩后主屏截图 + 当前专注任务标题**（仅用于当次相关性判定，调用方不落库；**数据库不持久化截图**；日志仅记 `requestId`、`user_id` hash、耗时、模型、token、`status`，**不打印 base64**）。
 
-处理逻辑同支付宝，返回：
-```json
-{ "code": "SUCCESS", "message": "成功" }
-```
+响应体与客户端状态机：**`focused` | `distracted` | `uncertain`** + `confidence` + `reason`（结构化输出）。客户端在单次分析成功后 **再调用 `POST /quota/report`**（见第三节）记入用量；若先做额度判断再调 Vision，可减少无效模型调用。
+
+**限流**：与 §「限流策略」一致，使用 `rate_limit_buckets`，`bucket_key` 建议 `vision:user:{user_id}`；与 `POST /quota/report` 的 `quota:user:{user_id}` 分开计数。
 
 ---
 
@@ -527,7 +557,7 @@ POST /payment/webhook/wechat
 GET /shop/items
 ```
 
-> 无需登录，商品列表全局统一。新增装扮只需更新服务端，客户端无需升级。
+> 无需登录，商品列表全局统一。新增装扮只需更新 **数据库或静态配置**，客户端无需升级。
 
 **Response**
 ```json
@@ -580,7 +610,7 @@ Authorization: Bearer <jwt>
 }
 ```
 
-> **缓存**：Redis `inventory:{user_id}` TTL 10分钟，购买/装备操作后主动失效。
+> **数据源**：直接从 `inventory` / `equipped_items`/`user_stats` 读取；不写 Redis。**可选**：同一 **Edge Function 实例（isolate）存活期内**的进程内 LRU 短缓存，仅在写库成功后失效。
 
 ---
 
@@ -620,7 +650,7 @@ Authorization: Bearer <jwt>
 }
 ```
 
-> **服务端校验**：积分以 `user_stats.points` 为准，客户端本地积分仅做 UI 展示，不可信。
+> **服务端校验**（Functions 侧）：积分以 `user_stats.points` 为准，客户端本地积分仅做 UI 展示，不可信。
 
 ---
 
@@ -733,18 +763,46 @@ CREATE TABLE quota_usage (
   used_seconds  INT DEFAULT 0,
   PRIMARY KEY (user_id, month)
 );
+
+-- HTTP 限流（替代 Redis KV）：对齐到日历分钟的一组 key
+CREATE TABLE rate_limit_buckets (
+  bucket_key     TEXT NOT NULL,
+  window_start   TIMESTAMPTZ NOT NULL,
+  hit_count      INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (bucket_key, window_start)
+);
+
+CREATE INDEX rate_limit_buckets_key_recent ON rate_limit_buckets (bucket_key, window_start DESC);
+
+-- 易支付 webhook 幂等：同一 merchant out_trade_no 仅允许一条成功入账路径（先插入再事务内改订单）
+CREATE TABLE epay_webhook_dedupe (
+  out_trade_no    TEXT PRIMARY KEY,
+  processed_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
 
 ---
 
-## 十、Redis Key 规范
+## 十、限流与幂等约定（PostgreSQL / Supabase）
 
-| Key | TTL | 用途 |
-|-----|-----|------|
-| `quota:{user_id}:{month}` | 月末 | AI 检测剩余秒数缓存 |
-| `session:{user_id}` | 24h | 当前登录态缓存 |
-| `webhook:alipay:{trade_no}` | 24h | 防重放 |
-| `webhook:wechat:{trade_no}` | 24h | 防重放 |
-| `rate:{ip}:login` | 60s | 登录限流计数 |
-| `rate:{user_id}:api` | 60s | 通用接口限流 |
-| `rate:{user_id}:quota` | 60s | 上报限流 |
+**原则**：不向架构中额外引入 Redis、Memcached 或独立队列；限流计数与 Webhook 去重全部由 **上文 `rate_limit_buckets`、`epay_webhook_dedupe`** 承载。Supabase Auth 自带的 Session/JWT **不由本表冗余**。
+
+### `rate_limit_buckets.bucket_key` 命名建议
+
+| `bucket_key` 模式 | 配合窗口（建议） | 用途 |
+|------------------|------------------|------|
+| `login:ip:{ip}` | 当前 UTC 分钟的 `window_start = date_trunc('minute', now())` | 注册 / 登录 |
+| `api:user:{user_id}` | 同上 | 通用已认证接口 |
+| `quota:user:{user_id}` | 同上 | `POST /quota/report` |
+| `vision:user:{user_id}` | 同上 | `POST /vision/analyze` |
+| `payment:user:{user_id}` | 同上 | `POST /payment/create` |
+
+对每个请求：**`UPSERT`** 该行 `hit_count`，若超过 §「限流策略」阈值则 **`429`**。可配合 **周期性 SQL**（如 `delete from rate_limit_buckets where window_start < now() - interval '2 hours'`）或 Supabase Cron 精简历史行。
+
+### `epay_webhook_dedupe`
+
+在验签通过后、更新 `orders` 之前：**先插入 `out_trade_no`**；冲突则视作易支付重复通知，**HTTP 仍返回约定成功**，避免无限重试。与 **`orders` 更新的同一 Postgres 事务**内编排时注意 **顺序**（先 dedupe insert 成功者才执行扣款入账逻辑；若你希望「仅已成功支付才写 dedupe」，可改为在完成 `orders.status = paid` 的同一事务内 `INSERT ... ON CONFLICT DO NOTHING`）。
+
+### Session / 配额
+
+登录态依赖 **Supabase Auth** JWT；配额余量 **`quota_usage` + 套餐表** 计算，不靠外部缓存层。
