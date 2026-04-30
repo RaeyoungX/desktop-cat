@@ -15,6 +15,7 @@
 - **数据库**：读写 **Supabase Postgres**；需在 Functions 中使用 **Service Role** 的路径（如付费 Webhook 写订阅）必须服务端校验签名后执行，密钥仅存 **Edge Secrets**。
 - **校验**：推荐使用 **Zod** 解析 Body / Query。
 - **敏感配置**：`GCP_PROJECT_ID`、`GCP_PRIVATE_KEY`、`GCP_CLIENT_EMAIL`、`VERTEX_LOCATION`、`VISION_MODEL`、`EPAY_PID`、`EPAY_KEY`、`EPAY_GATEWAY` 等通过 **Supabase Dashboard → Edge Functions → Secrets**（或 `supabase secrets set`）注入，在 Function 内 `Deno.env.get(...)` 读取。
+- **Vision 默认值**：`VERTEX_LOCATION=us-central1`、`VISION_MODEL=gemini-3.1-flash-lite-preview`。Vertex URL 与现有 `analyze-speech` 一致：`https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/{region}/publishers/google/models/{model}:generateContent`。
 - **日志**：使用 `console` / Deno 标准输出或 Supabase 仪表盘日志；**禁止**在日志中输出截图、任务全文、支付验签原文。
 
 ### 请求头

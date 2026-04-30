@@ -1,5 +1,6 @@
 import type { VisionResult, FocusStatus } from "../../src/shared/types";
 import { getApiBaseUrl } from "./store";
+import { inspect } from "node:util";
 
 function shouldLogVision(): boolean {
   return Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.DESKTOP_CAT_LOG_API === "true";
@@ -8,7 +9,11 @@ function shouldLogVision(): boolean {
 function logVision(message: string, details?: Record<string, unknown>): void {
   if (!shouldLogVision()) return;
   if (details) {
-    console.log(`[desktop-cat][vision] ${message}`, details);
+    console.log(`[desktop-cat][vision] ${message} ${inspect(details, {
+      colors: false,
+      depth: null,
+      breakLength: 140,
+    })}`);
     return;
   }
   console.log(`[desktop-cat][vision] ${message}`);

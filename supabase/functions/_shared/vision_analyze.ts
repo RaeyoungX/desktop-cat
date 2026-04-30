@@ -31,11 +31,27 @@ const credentials: ServiceAccountCredentials = {
   client_email: Deno.env.get("GCP_CLIENT_EMAIL") ?? "",
 };
 
-const VERTEX_LOCATION = Deno.env.get("VERTEX_LOCATION") ?? "global";
-const MODEL = Deno.env.get("VISION_MODEL") ?? "gemini-3.1-flash-preview";
+const VERTEX_LOCATION = Deno.env.get("VERTEX_LOCATION") ?? Deno.env.get("VERTEX_REGION") ?? "us-central1";
+const DEFAULT_VISION_MODEL = "gemini-3.1-flash-lite-preview";
+const MODEL = Deno.env.get("VISION_MODEL")?.trim() || DEFAULT_VISION_MODEL;
 
 function getVertexUrl(): string {
   return `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${credentials.project_id}/locations/${VERTEX_LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+}
+
+function isGemini3Model(model: string): boolean {
+  return model.startsWith("gemini-3");
+}
+
+function generationConfigForModel(model: string): Record<string, unknown> {
+  return {
+    responseMimeType: "application/json",
+    temperature: 0,
+    maxOutputTokens: 512,
+    thinkingConfig: isGemini3Model(model)
+      ? { thinkingLevel: "MINIMAL" }
+      : { thinkingBudget: 0 },
+  };
 }
 
 function sanitizeTaskName(value: unknown): string {
@@ -145,7 +161,7 @@ export async function analyzeScreenWithVision(
   }
 
   const accessToken = await getAccessToken(credentials, "https://www.googleapis.com/auth/cloud-platform");
-  const vertexBody = {
+  const vertexContents = {
     contents: [{
       role: "user",
       parts: [
@@ -153,14 +169,6 @@ export async function analyzeScreenWithVision(
         { text: buildPrompt(taskName) },
       ],
     }],
-    generationConfig: {
-      responseMimeType: "application/json",
-      temperature: 0,
-      maxOutputTokens: 512,
-      thinkingConfig: {
-        thinkingBudget: 0,
-      },
-    },
   };
 
   let vertexRes: Response | null = null;
@@ -172,21 +180,31 @@ export async function analyzeScreenWithVision(
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(vertexBody),
+      body: JSON.stringify({
+        ...vertexContents,
+        generationConfig: generationConfigForModel(MODEL),
+      }),
     });
     if (vertexRes.ok) break;
     lastErrText = await vertexRes.text();
     console.error("[vision] Vertex error", {
       requestId,
+      model: MODEL,
+      location: VERTEX_LOCATION,
       status: vertexRes.status,
       attempt: attempt + 1,
+      detail: lastErrText.slice(0, 1000),
     });
     if ([400, 401, 403].includes(vertexRes.status)) break;
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
   }
 
   if (!vertexRes || !vertexRes.ok) {
-    return fail("VISION_FAILED", "Vision analysis failed", 502, { detail: lastErrText.slice(0, 300) });
+    return fail("VISION_FAILED", "Vision analysis failed", 502, {
+      model: MODEL,
+      location: VERTEX_LOCATION,
+      detail: lastErrText.slice(0, 1000),
+    });
   }
 
   const textContent = parseVertexText(await vertexRes.json());

@@ -92,8 +92,8 @@ Gemini Vision 必填：
 GCP_PROJECT_ID=...
 GCP_PRIVATE_KEY=...
 GCP_CLIENT_EMAIL=...
-VERTEX_LOCATION=global
-VISION_MODEL=gemini-3.1-flash-preview
+VERTEX_LOCATION=us-central1
+VISION_MODEL=gemini-3.1-flash-lite-preview
 ```
 
 易支付可选；缺失时 `/payment/create` 返回 `PAYMENT_NOT_CONFIGURED`，其他功能照常可用：
