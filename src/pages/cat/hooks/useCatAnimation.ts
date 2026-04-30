@@ -184,6 +184,9 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     let animation = 0;
     let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
     let lastIgnore = true;
+    let dragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
     let cancelled = false;
 
     const sprites: Record<string, SpriteData> = {};
@@ -349,6 +352,12 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
 
     function tick(timestamp: number) {
       const now = Date.now();
+      if (dragging) {
+        draw(timestamp);
+        animation = requestAnimationFrame(tick);
+        return;
+      }
+
       if (state === "walk") {
         catX += WALK_SPEED * dir;
         catY = screenH - CAT_SPRITE_HEIGHT;
@@ -424,16 +433,46 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     });
 
     const onMouseMove = (event: MouseEvent) => {
+      if (dragging) {
+        const nextX = Math.max(0, Math.min(screenW - CAT_CANVAS_WIDTH, cursorX - originX - dragOffsetX));
+        const nextY = Math.max(0, Math.min(screenH - CAT_CANVAS_HEIGHT, event.screenY - originY - dragOffsetY));
+        catX = nextX;
+        catY = nextY;
+        window.cat.move({ x: Math.round(catX + originX), y: Math.round(catY + originY) });
+        lastX = Math.round(catX);
+        lastY = Math.round(catY);
+        return;
+      }
       const over = isOverCat(event.clientX, event.clientY);
       if (over !== !lastIgnore) {
         lastIgnore = !over;
         window.cat.setMouseIgnore(!over);
       }
     };
+    const onMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0 || !isOverCat(event.clientX, event.clientY)) return;
+      event.preventDefault();
+      dragging = true;
+      dragOffsetX = event.clientX;
+      dragOffsetY = event.clientY;
+      lastIgnore = false;
+      window.cat.setMouseIgnore(false);
+      showBubble("挪个位置。", 1200);
+    };
+    const stopDragging = () => {
+      if (!dragging) return;
+      dragging = false;
+      const over = isOverCat(Math.max(0, Math.min(CAT_CANVAS_WIDTH - 1, dragOffsetX)), Math.max(0, Math.min(CAT_CANVAS_HEIGHT - 1, dragOffsetY)));
+      lastIgnore = !over;
+      window.cat.setMouseIgnore(!over);
+    };
     const onClick = () => {
       showBubble(["喵？", "别戳啦。", "继续专注。"][Math.floor(Math.random() * 3)], 1800);
     };
     window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", stopDragging);
+    window.addEventListener("blur", stopDragging);
+    canvas.addEventListener("mousedown", onMouseDown);
     canvas.addEventListener("click", onClick);
 
     void Promise.all([
@@ -467,6 +506,9 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
       cleanupBubble();
       cleanupEquip();
       window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", stopDragging);
+      window.removeEventListener("blur", stopDragging);
+      canvas.removeEventListener("mousedown", onMouseDown);
       canvas.removeEventListener("click", onClick);
       if (bubbleTimer) clearTimeout(bubbleTimer);
     };

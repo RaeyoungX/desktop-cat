@@ -90,7 +90,7 @@ function createCatWindow(): void {
   });
 
   void catWindow.loadURL(rendererUrl("#/cat"));
-  catWindow.setIgnoreMouseEvents(true, { forward: true });
+  catWindow.setIgnoreMouseEvents(false);
   catWindow.hide();
 
   if (process.platform === "darwin") {
@@ -244,6 +244,7 @@ function startSession(task: { name: string; duration: number }): ActiveSession {
   sendToDashboard("session:changed", currentSession);
   if (catWindow && !catWindow.isDestroyed()) {
     catWindow.show();
+    catWindow.setIgnoreMouseEvents(false);
     setTimeout(() => sendToCat("cat:show-bubble", "我看着你呢，加油。"), 800);
   }
   detector.start(currentSession.name, currentSession.localId);
@@ -277,7 +278,10 @@ async function endSession(): Promise<FocusSession | null> {
   sendToDashboard("session:changed", null);
   sendToCat("cat:show-bubble", "今天辛苦了。");
   setTimeout(() => {
-    if (!currentSession && catWindow && !catWindow.isDestroyed()) catWindow.hide();
+    if (!currentSession && catWindow && !catWindow.isDestroyed()) {
+      catWindow.setIgnoreMouseEvents(false);
+      catWindow.hide();
+    }
   }, 2500);
   return session;
 }
