@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeVisionPayload } from "./vision-client";
+import { normalizeVisionPayload } from "../../../electron/main/vision-client";
 
 describe("vision response parser", () => {
   it("normalizes unknown statuses to uncertain", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadTodayTasksFromBucket, makeTaskBucket } from "./tasks";
+import { loadTodayTasksFromBucket, makeTaskBucket } from "../../../src/shared/tasks";
 
 describe("task date buckets", () => {
   it("returns tasks for the same local day", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyVisionResult, capturePrimaryScreenshot } from "./detector";
+import { applyVisionResult, capturePrimaryScreenshot } from "../../../electron/main/detector";
 
 describe("vision distraction state machine", () => {
   it("does not alert on a single distracted result", () => {

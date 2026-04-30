@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getTrayIconSize } from "./tray-icon";
+import { getTrayIconSize } from "../../../electron/main/tray-icon";
 
 describe("tray icon sizing", () => {
   it("uses a compact menu bar size on macOS", () => {

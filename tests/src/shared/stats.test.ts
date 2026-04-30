@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildDailyStats, buildWeekStats, catQualityMessage } from "./stats";
-import type { FocusSession, TodayTask } from "./types";
+import { buildDailyStats, buildWeekStats, catQualityMessage } from "../../../src/shared/stats";
+import type { FocusSession, TodayTask } from "../../../src/shared/types";
 
 describe("stats helpers", () => {
   it("uses actual focused seconds and reminder count for today's summary", () => {
