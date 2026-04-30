@@ -14,6 +14,15 @@ function logVision(message: string, details?: Record<string, unknown>): void {
   console.log(`[desktop-cat][vision] ${message}`);
 }
 
+function parseJsonOrText(text: string): unknown {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text.slice(0, 300);
+  }
+}
+
 function normalizeStatus(value: unknown): FocusStatus {
   return value === "focused" || value === "distracted" || value === "uncertain"
     ? value
@@ -36,6 +45,28 @@ export function normalizeVisionPayload(payload: unknown): VisionResult {
     reason: typeof raw.reason === "string" ? raw.reason.trim() : "",
     checkId: typeof raw.checkId === "string" ? raw.checkId : undefined,
   };
+}
+
+export function visionResponseForLog(payload: unknown): unknown {
+  if (payload && typeof payload === "object" && "ok" in payload) {
+    const wrapped = payload as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string; data?: unknown } };
+    if (wrapped.ok) {
+      return {
+        ok: true,
+        data: normalizeVisionPayload(wrapped.data),
+      };
+    }
+    return {
+      ok: false,
+      error: {
+        code: wrapped.error?.code,
+        message: wrapped.error?.message,
+        data: wrapped.error?.data,
+      },
+    };
+  }
+  if (payload && typeof payload === "object") return normalizeVisionPayload(payload);
+  return payload;
 }
 
 export type AnalyzeScreenInput = {
@@ -91,11 +122,15 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
     }),
   });
 
+  const responseText = await response.text();
+  const payload = parseJsonOrText(responseText);
+
   if (!response.ok) {
     logVision("<- POST /vision/analyze", {
       checkId: input.checkId,
       status: response.status,
       ok: false,
+      response: visionResponseForLog(payload),
       elapsedMs: Date.now() - startedAt,
     });
     return {
@@ -107,7 +142,6 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
     };
   }
 
-  const payload = await response.json();
   if (payload && typeof payload === "object" && "ok" in payload) {
     const wrapped = payload as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
     if (!wrapped.ok) {
@@ -116,6 +150,7 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
         status: response.status,
         ok: false,
         code: wrapped.error?.code,
+        response: visionResponseForLog(payload),
         elapsedMs: Date.now() - startedAt,
       });
       return {
@@ -133,6 +168,7 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
       ok: true,
       result: result.status,
       confidence: result.confidence,
+      response: visionResponseForLog(payload),
       elapsedMs: Date.now() - startedAt,
     });
     return result;
@@ -144,6 +180,7 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
     ok: true,
     result: result.status,
     confidence: result.confidence,
+    response: visionResponseForLog(payload),
     elapsedMs: Date.now() - startedAt,
   });
   return result;

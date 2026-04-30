@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeVisionPayload } from "../../../electron/main/vision-client";
+import { normalizeVisionPayload, visionResponseForLog } from "../../../electron/main/vision-client";
 
 describe("vision response parser", () => {
   it("normalizes unknown statuses to uncertain", () => {
@@ -25,6 +25,36 @@ describe("vision response parser", () => {
       activity: "刷视频",
       reason: "Short video feed is unrelated.",
       checkId: "check-1",
+    });
+  });
+
+  it("formats wrapped analyze responses for safe logging", () => {
+    expect(visionResponseForLog({
+      ok: true,
+      data: {
+        status: "focused",
+        confidence: 0.73,
+        activity: "写代码",
+        reason: "Editor is task related.",
+        checkId: "check-2",
+      },
+    })).toEqual({
+      ok: true,
+      data: {
+        status: "focused",
+        confidence: 0.73,
+        activity: "写代码",
+        reason: "Editor is task related.",
+        checkId: "check-2",
+      },
+    });
+
+    expect(visionResponseForLog({
+      ok: false,
+      error: { code: "QUOTA_EXCEEDED", message: "额度不足" },
+    })).toEqual({
+      ok: false,
+      error: { code: "QUOTA_EXCEEDED", message: "额度不足", data: undefined },
     });
   });
 });
