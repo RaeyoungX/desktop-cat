@@ -54,6 +54,20 @@ export type DetectorOptions = DetectorCallbacks & {
   getEndpoint: () => string | undefined;
 };
 
+type ScreenshotCapture = (options: { format: "jpg"; screen?: number }) => Promise<Buffer>;
+
+export async function capturePrimaryScreenshot(capture: ScreenshotCapture = screenshot as ScreenshotCapture): Promise<Buffer> {
+  try {
+    return await capture({ format: "jpg", screen: 0 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("Invalid choice of displayId") || message.includes("valid choice")) {
+      return capture({ format: "jpg" });
+    }
+    throw error;
+  }
+}
+
 export class VisionDetector {
   private timer: ReturnType<typeof setInterval> | null = null;
   private currentTask = "";
@@ -97,7 +111,7 @@ export class VisionDetector {
     let imageBuffer: Buffer | null = null;
     let screenshotBase64 = "";
     try {
-      imageBuffer = await screenshot({ format: "jpg", screen: "main" }) as Buffer;
+      imageBuffer = await capturePrimaryScreenshot();
       screenshotBase64 = imageBuffer.toString("base64");
     } catch (error) {
       this.options.onStatus?.(`截图失败：${error instanceof Error ? error.message : "unknown"}`);

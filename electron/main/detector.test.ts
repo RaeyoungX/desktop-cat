@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyVisionResult } from "./detector";
+import { applyVisionResult, capturePrimaryScreenshot } from "./detector";
 
 describe("vision distraction state machine", () => {
   it("does not alert on a single distracted result", () => {
@@ -30,5 +30,21 @@ describe("vision distraction state machine", () => {
 
     expect(focused).toMatchObject({ consecutiveDistracted: 0, alerting: false, event: "focused" });
     expect(uncertain).toMatchObject({ consecutiveDistracted: 0, alerting: false, event: "focused" });
+  });
+});
+
+describe("primary screenshot capture", () => {
+  it("uses display 0 first and falls back to default capture when display selection fails", async () => {
+    const calls: Array<{ format: "jpg"; screen?: number }> = [];
+    const capture = async (options: { format: "jpg"; screen?: number }) => {
+      calls.push(options);
+      if (options.screen === 0) throw new Error("Invalid choice of displayId: main");
+      return Buffer.from("fallback-image");
+    };
+
+    const result = await capturePrimaryScreenshot(capture);
+
+    expect(result.toString()).toBe("fallback-image");
+    expect(calls).toEqual([{ format: "jpg", screen: 0 }, { format: "jpg" }]);
   });
 });
