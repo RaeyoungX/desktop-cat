@@ -67,6 +67,16 @@ function elapsedSessionMinutes(): number {
   return Math.floor((Date.now() - currentSession.startTime) / 60_000);
 }
 
+function toggleDashboardDevTools(): void {
+  createDashboard();
+  if (!dashboardWindow || dashboardWindow.isDestroyed()) return;
+  if (dashboardWindow.webContents.isDevToolsOpened()) {
+    dashboardWindow.webContents.closeDevTools();
+  } else {
+    dashboardWindow.webContents.openDevTools({ mode: "detach" });
+  }
+}
+
 function createCatWindow(): void {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
@@ -177,6 +187,10 @@ function updateTrayMenu(): void {
     sessionItem,
     { label: currentSession ? "查看专注" : "打开 Dashboard", click: () => createDashboard() },
     ...(currentSession ? [{ label: "结束当前专注", click: () => void endSession() }] : []),
+    ...(isDev ? [
+      { type: "separator" as const },
+      { label: "打开/关闭 Dashboard 控制台", click: () => toggleDashboardDevTools() },
+    ] : []),
     { type: "separator" },
     { label: "退出", click: () => app.quit() },
   ]));
