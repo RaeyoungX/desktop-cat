@@ -36,6 +36,17 @@ describe("EasyPay helpers", () => {
     });
   });
 
+  it("accepts EasyPay create responses that only include a qrcode payload", () => {
+    expect(normalizeEasyPayCreateResponse({
+      code: 1,
+      trade_no: "EP-2",
+      qrcode: "weixin://wxpay/bizpayurl?pr=payload",
+    })).toEqual({
+      tradeNo: "EP-2",
+      qrCode: "weixin://wxpay/bizpayurl?pr=payload",
+    });
+  });
+
   it("normalizes EasyPay query status", () => {
     expect(normalizeEasyPayOrderStatus(1)).toBe("paid");
     expect(normalizeEasyPayOrderStatus(0)).toBe("pending");

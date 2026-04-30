@@ -12,7 +12,7 @@ export type EasyPayCreateResponse = {
 
 export type NormalizedPaymentLink = {
   tradeNo: string;
-  payUrl: string;
+  payUrl?: string;
   qrCode?: string;
 };
 
@@ -38,10 +38,14 @@ export function normalizeEasyPayCreateResponse(response: EasyPayCreateResponse, 
   const tradeNo = response.trade_no || "";
   const payUrl = (preferMobile && response.payurl2) || response.payurl || response.payurl2 || response.img || "";
   const qrCode = response.qrcode || undefined;
-  if (!tradeNo || !payUrl) {
+  if (!tradeNo || (!payUrl && !qrCode)) {
     throw new Error("EasyPay response did not include a usable payment link");
   }
-  return { tradeNo, payUrl, qrCode };
+  return {
+    tradeNo,
+    ...(payUrl ? { payUrl } : {}),
+    ...(qrCode ? { qrCode } : {}),
+  };
 }
 
 export function normalizeEasyPayOrderStatus(value: unknown): "paid" | "pending" {

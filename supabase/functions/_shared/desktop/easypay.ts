@@ -102,7 +102,7 @@ export async function createEasyPayOrder(config: EasyPayConfig, input: {
   clientIp: string;
 }): Promise<{
   tradeNo: string;
-  payUrl: string;
+  payUrl?: string;
   qrCode: string;
   raw: EasyPayCreateResult;
 }> {
@@ -134,11 +134,11 @@ export async function createEasyPayOrder(config: EasyPayConfig, input: {
 
   const payUrl = raw.payurl || raw.payurl2 || raw.img || "";
   const qrCode = raw.qrcode || "";
-  if (!payUrl) throw new Error("EasyPay response missing pay URL");
+  if (!payUrl && !qrCode) throw new Error("EasyPay response missing payment payload");
 
   return {
     tradeNo: raw.trade_no || "",
-    payUrl,
+    ...(payUrl ? { payUrl } : {}),
     qrCode,
     raw,
   };
