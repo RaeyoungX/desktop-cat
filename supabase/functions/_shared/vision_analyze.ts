@@ -76,10 +76,16 @@ function clampConfidence(value: unknown): number {
   return Number.isFinite(number) ? Math.max(0, Math.min(number, 1)) : 0;
 }
 
-function buildPrompt(taskName: string): string {
-  return `You are a focus relevance judge for a desktop productivity app.
+async function shortHash(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .slice(0, 6)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
-Current focus task: "${taskName}"
+const VISION_SYSTEM_PROMPT = `You are a focus relevance judge for a desktop productivity app.
 
 Analyze the screenshot and decide whether the visible screen content is meaningfully related to the current task.
 
@@ -110,6 +116,11 @@ Respond ONLY as valid JSON:
   "activity": "short Chinese phrase, <= 12 chars",
   "reason": "brief English reason, no sensitive details"
 }`;
+
+function buildUserPrompt(taskName: string): string {
+  return `Current focus task: "${taskName}"
+
+Analyze the screenshot using the system rules.`;
 }
 
 function parseVertexText(vertexData: unknown): string {
@@ -169,13 +180,26 @@ export async function analyzeScreenWithVision(
     return fail("BAD_REQUEST", "Missing taskName", 400);
   }
 
+  const taskHash = await shortHash(taskName);
+  console.log("[vision] request", {
+    requestId,
+    user: publicUserId.slice(0, 8),
+    checkId,
+    taskLength: taskName.length,
+    taskHash,
+    platform: body.clientMeta?.platform ?? "unknown",
+  });
+
   const accessToken = await getAccessToken(credentials, "https://www.googleapis.com/auth/cloud-platform");
   const vertexContents = {
+    systemInstruction: {
+      parts: [{ text: VISION_SYSTEM_PROMPT }],
+    },
     contents: [{
       role: "user",
       parts: [
         { inlineData: { mimeType, data: body.screenshotBase64 } },
-        { text: buildPrompt(taskName) },
+        { text: buildUserPrompt(taskName) },
       ],
     }],
   };

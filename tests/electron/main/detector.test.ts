@@ -1,9 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyVisionResult, capturePrimaryScreenshot, VisionDetector } from "../../../electron/main/detector";
+import { applyVisionResult, capturePrimaryScreenshot, prepareScreenshotForVision, VisionDetector } from "../../../electron/main/detector";
 
 vi.mock("screenshot-desktop", () => ({
   default: async () => {
     throw new Error("Screen Recording permission denied");
+  },
+}));
+
+vi.mock("electron", () => ({
+  nativeImage: {
+    createFromBuffer: (buffer: Buffer) => ({
+      getSize: () => ({ width: 2560, height: 1440 }),
+      resize: (options: { width: number; height: number; quality: string }) => ({
+        getSize: () => ({ width: options.width, height: options.height }),
+        toJPEG: (quality: number) => Buffer.from(`jpeg:${options.width}x${options.height}:q${quality}:${buffer.length}`),
+      }),
+    }),
   },
 }));
 
@@ -81,6 +93,18 @@ describe("primary screenshot capture", () => {
 
     expect(result.toString()).toBe("fallback-image");
     expect(calls).toEqual([{ format: "jpg", screen: 0 }, { format: "jpg" }]);
+  });
+
+  it("compresses screenshots before sending them to Vision", () => {
+    const original = Buffer.alloc(9000);
+    const prepared = prepareScreenshotForVision(original);
+
+    expect(prepared.buffer.toString()).toBe("jpeg:1280x720:q70:9000");
+    expect(prepared.originalBytes).toBe(9000);
+    expect(prepared.processedBytes).toBeLessThan(prepared.originalBytes);
+    expect(prepared.width).toBe(1280);
+    expect(prepared.height).toBe(720);
+    expect(prepared.quality).toBe(70);
   });
 });
 

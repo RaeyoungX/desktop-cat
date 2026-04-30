@@ -1,9 +1,12 @@
+import { nativeImage } from "electron";
 import screenshot from "screenshot-desktop";
 import type { FocusStatus, TimelineEntry, VisionResult } from "../../src/shared/types";
 import { analyzeScreen } from "./vision-client";
 
 export const DETECTION_INTERVAL_MS = 30_000;
 export const DEFAULT_DISTRACT_THRESHOLD = 2;
+export const VISION_IMAGE_MAX_SIDE = 1280;
+export const VISION_IMAGE_JPEG_QUALITY = 70;
 export type DistractThreshold = 1 | 2 | 3;
 
 export type DetectorState = {
@@ -68,6 +71,15 @@ export type DetectorOptions = DetectorCallbacks & {
 
 type ScreenshotCapture = (options: { format: "jpg"; screen?: number }) => Promise<Buffer>;
 
+export type PreparedScreenshot = {
+  buffer: Buffer;
+  originalBytes: number;
+  processedBytes: number;
+  width: number;
+  height: number;
+  quality: number;
+};
+
 function shouldLogDetector(): boolean {
   return Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.DESKTOP_CAT_LOG_API === "true";
 }
@@ -91,6 +103,32 @@ export async function capturePrimaryScreenshot(capture: ScreenshotCapture = scre
     }
     throw error;
   }
+}
+
+export function prepareScreenshotForVision(
+  buffer: Buffer,
+  maxSide = VISION_IMAGE_MAX_SIDE,
+  quality = VISION_IMAGE_JPEG_QUALITY,
+): PreparedScreenshot {
+  const image = nativeImage.createFromBuffer(buffer);
+  const size = image.getSize();
+  const longest = Math.max(size.width, size.height);
+  const scale = longest > maxSide ? maxSide / longest : 1;
+  const width = Math.max(1, Math.round(size.width * scale));
+  const height = Math.max(1, Math.round(size.height * scale));
+  const resized = scale < 1
+    ? image.resize({ width, height, quality: "best" })
+    : image;
+  const processed = resized.toJPEG(quality);
+
+  return {
+    buffer: processed,
+    originalBytes: buffer.byteLength,
+    processedBytes: processed.byteLength,
+    width,
+    height,
+    quality,
+  };
 }
 
 function isScreenPermissionError(error: unknown): boolean {
@@ -166,15 +204,22 @@ export class VisionDetector {
 
     const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let imageBuffer: Buffer | null = null;
+    let preparedBuffer: Buffer | null = null;
     let screenshotBase64 = "";
     try {
       logDetector("capture start", { checkId, sessionId: this.sessionId });
       imageBuffer = await capturePrimaryScreenshot();
+      const prepared = prepareScreenshotForVision(imageBuffer);
+      preparedBuffer = prepared.buffer;
       logDetector("capture ok", {
         checkId,
-        bytes: imageBuffer.byteLength,
+        originalBytes: prepared.originalBytes,
+        processedBytes: prepared.processedBytes,
+        width: prepared.width,
+        height: prepared.height,
+        quality: prepared.quality,
       });
-      screenshotBase64 = imageBuffer.toString("base64");
+      screenshotBase64 = preparedBuffer.toString("base64");
     } catch (error) {
       logDetector("capture failed", {
         checkId,
@@ -190,6 +235,7 @@ export class VisionDetector {
       return;
     } finally {
       imageBuffer = null;
+      preparedBuffer = null;
     }
 
     let result: VisionResult;

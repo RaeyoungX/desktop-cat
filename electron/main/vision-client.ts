@@ -23,6 +23,10 @@ function parseJsonOrText(text: string): unknown {
   }
 }
 
+function taskPreview(taskName: string): string {
+  return taskName.trim().replace(/\s+/g, " ").slice(0, 80);
+}
+
 function normalizeStatus(value: unknown): FocusStatus {
   return value === "focused" || value === "distracted" || value === "uncertain"
     ? value
@@ -101,6 +105,7 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
     checkId: input.checkId,
     endpoint: input.endpoint,
     taskLength: input.taskName.length,
+    taskPreview: taskPreview(input.taskName),
     imageBytesApprox: Math.round((input.screenshotBase64.length * 3) / 4),
   });
 
