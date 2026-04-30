@@ -1,0 +1,263 @@
+import { useEffect, useRef } from "react";
+
+const CAT_W = 160;
+const CAT_H = 160;
+const CANVAS_H = 210;
+const WALK_SPEED = 1.5;
+
+type CatState = "walk" | "approach" | "sit" | "sleep" | "loaf" | "peek" | "box";
+
+const STATE_DURATION: Record<CatState, { min: number; max: number }> = {
+  walk: { min: 4000, max: 12000 },
+  approach: { min: 4000, max: 12000 },
+  sit: { min: 5000, max: 14000 },
+  sleep: { min: 18000, max: 50000 },
+  loaf: { min: 8000, max: 20000 },
+  peek: { min: 3000, max: 7000 },
+  box: { min: 10000, max: 25000 },
+};
+
+const TRANSITIONS: Record<string, Array<{ state: CatState; weight: number }>> = {
+  walk: [{ state: "sit", weight: 60 }, { state: "loaf", weight: 20 }, { state: "walk", weight: 20 }],
+  sit: [{ state: "walk", weight: 45 }, { state: "sleep", weight: 35 }, { state: "loaf", weight: 20 }],
+  sleep: [{ state: "sit", weight: 85 }, { state: "sleep", weight: 15 }],
+  loaf: [{ state: "walk", weight: 40 }, { state: "sleep", weight: 30 }, { state: "sit", weight: 30 }],
+  peek: [{ state: "sit", weight: 60 }, { state: "walk", weight: 40 }],
+  box: [{ state: "sit", weight: 50 }, { state: "walk", weight: 30 }, { state: "sleep", weight: 20 }],
+};
+
+function rand(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+function nextState(state: CatState): CatState {
+  const options = TRANSITIONS[state] ?? TRANSITIONS.walk;
+  const total = options.reduce((sum, item) => sum + item.weight, 0);
+  let cursor = Math.random() * total;
+  for (const option of options) {
+    cursor -= option.weight;
+    if (cursor <= 0) return option.state;
+  }
+  return options[0].state;
+}
+
+function useImage(src: string): HTMLImageElement {
+  const img = new Image();
+  img.src = src;
+  return img;
+}
+
+export function CatWindow() {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const bubbleRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const bubbleNode = bubbleRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context || !bubbleNode) return;
+    if (!window.cat) return;
+    const ctx = context;
+    const bubble = bubbleNode;
+
+    let catX = 0;
+    let catY = 0;
+    let screenW = 1920;
+    let screenH = 1080;
+    let originX = 0;
+    let originY = 0;
+    let dir = 1;
+    let state: CatState = "walk";
+    let stateUntil = Date.now() + rand(3000, 8000);
+    let approachTargetX = 0;
+    let approachTargetY = 0;
+    let lastX = -1;
+    let lastY = -1;
+    let cursorX = -9999;
+    let cursorY = -9999;
+    let equipped: string[] = [];
+    let animation = 0;
+    let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastIgnore = true;
+
+    const images = {
+      walk: useImage("/assets/walk.png"),
+      sit: useImage("/assets/sit.png"),
+      sleep: useImage("/assets/sleep.png"),
+      loaf: useImage("/assets/cat-loaf.png"),
+      peek: useImage("/assets/cat-peek.png"),
+      box: useImage("/assets/cat-box.png"),
+    };
+
+    function showBubble(text: string, ms = 3200) {
+      if (bubbleTimer) clearTimeout(bubbleTimer);
+      bubble.textContent = text;
+      bubble.classList.add("show");
+      bubbleTimer = setTimeout(() => bubble.classList.remove("show"), ms);
+    }
+
+    function setState(next: CatState) {
+      if (state === next) return;
+      state = next;
+      const duration = STATE_DURATION[next];
+      stateUntil = Date.now() + rand(duration.min, duration.max);
+      if ((next === "sit" || next === "sleep" || next === "loaf") && Math.random() < 0.05) {
+        showBubble(["喵。", "继续哦。", "我在巡逻。"][Math.floor(Math.random() * 3)]);
+      }
+    }
+
+    function drawImageForState(timestamp: number) {
+      ctx.clearRect(0, 0, CAT_W, CANVAS_H);
+      ctx.save();
+      if (dir === -1) {
+        ctx.translate(CAT_W, 0);
+        ctx.scale(-1, 1);
+      }
+
+      if (state === "walk" || state === "approach") {
+        const image = images.walk;
+        const frames = 4;
+        const frameW = image.naturalWidth ? image.naturalWidth / frames : 1;
+        const frame = Math.floor(timestamp / 120) % frames;
+        if (image.complete && image.naturalWidth) {
+          ctx.drawImage(image, frame * frameW, 0, frameW, image.naturalHeight, 6, CANVAS_H - CAT_H, CAT_W - 12, CAT_H);
+        }
+      } else {
+        const image = state === "sit" ? images.sit : state === "sleep" ? images.sleep : images[state];
+        if (image.complete && image.naturalWidth) {
+          ctx.drawImage(image, 0, CANVAS_H - CAT_H, CAT_W, CAT_H);
+        }
+      }
+
+      ctx.restore();
+      if (equipped.includes("hat")) drawEmoji("🎩", CAT_W / 2, 42, 22);
+      if (equipped.includes("crown")) drawEmoji("👑", CAT_W / 2, 42, 22);
+      if (equipped.includes("bow")) drawEmoji("🎀", CAT_W / 2 + 28, 88, 17);
+      if (equipped.includes("glasses")) drawEmoji("🕶️", CAT_W / 2, 74, 16);
+      if (equipped.includes("stars") && Math.floor(timestamp / 300) % 2 === 0) drawEmoji("✨", 36 + Math.random() * 88, 54 + Math.random() * 55, 12);
+    }
+
+    function drawEmoji(text: string, x: number, y: number, size: number) {
+      ctx.save();
+      ctx.font = `${size}px serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    }
+
+    function isOverCat(x: number, y: number): boolean {
+      if (x < 0 || y < 0 || x >= CAT_W || y >= CANVAS_H) return false;
+      const alpha = ctx.getImageData(Math.floor(x), Math.floor(y), 1, 1).data[3];
+      return alpha > 30;
+    }
+
+    function tick(timestamp: number) {
+      const now = Date.now();
+      if (state === "walk") {
+        catX += WALK_SPEED * dir;
+        catY = screenH - CAT_H;
+        if (catX <= 0) {
+          catX = 0;
+          dir = 1;
+        }
+        if (catX >= screenW - CAT_W) {
+          catX = screenW - CAT_W;
+          dir = -1;
+        }
+        if (now > stateUntil) {
+          const cursorLocalX = cursorX - originX;
+          if (cursorLocalX > 0 && cursorLocalX < screenW && Math.random() < 0.25) {
+            approachTargetX = Math.max(0, Math.min(screenW - CAT_W, cursorLocalX - CAT_W / 2));
+            approachTargetY = screenH - CAT_H;
+            setState("approach");
+          } else {
+            setState(nextState("walk"));
+          }
+        }
+      } else if (state === "approach") {
+        const dx = approachTargetX - catX;
+        const dy = approachTargetY - catY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 8) {
+          catX = approachTargetX;
+          catY = approachTargetY;
+          setState("sit");
+        } else {
+          const speed = WALK_SPEED * 1.7;
+          catX += (dx / dist) * speed;
+          catY += (dy / dist) * speed;
+          dir = dx >= 0 ? 1 : -1;
+        }
+      } else if (now > stateUntil) {
+        catY = screenH - CAT_H;
+        setState(nextState(state));
+      }
+
+      drawImageForState(timestamp);
+      const rx = Math.round(catX);
+      const ry = Math.round(catY);
+      if (rx !== lastX || ry !== lastY) {
+        window.cat.move({ x: rx + originX, y: ry + originY });
+        lastX = rx;
+        lastY = ry;
+      }
+      animation = requestAnimationFrame(tick);
+    }
+
+    const cleanupCursor = window.cat.onCursor((pos) => {
+      cursorX = pos.x;
+      cursorY = pos.y;
+    });
+    const cleanupComeHere = window.cat.onComeHere((cursor) => {
+      approachTargetX = Math.max(0, Math.min(screenW - CAT_W, cursor.x - originX - CAT_W / 2));
+      approachTargetY = Math.max(0, Math.min(screenH - CAT_H, cursor.y - originY - CAT_H / 2));
+      setState("approach");
+      showBubble("喵，在干嘛呢？", 4000);
+    });
+    const cleanupBubble = window.cat.onShowBubble((text) => showBubble(text));
+    const cleanupEquip = window.cat.onEquipItems((items) => {
+      equipped = items;
+    });
+
+    const mouseMove = (event: MouseEvent) => {
+      const over = isOverCat(event.clientX, event.clientY);
+      if (over !== !lastIgnore) {
+        lastIgnore = !over;
+        window.cat.setMouseIgnore(!over);
+      }
+    };
+    const click = () => showBubble(["喵？", "别戳啦。", "继续专注。"][Math.floor(Math.random() * 3)], 1800);
+
+    window.addEventListener("mousemove", mouseMove);
+    canvas.addEventListener("click", click);
+
+    void window.cat.getScreenSize().then((size) => {
+      screenW = size.width;
+      screenH = size.height;
+      originX = size.originX || 0;
+      originY = size.originY || 0;
+      catX = Math.floor(screenW / 2 - CAT_W / 2);
+      catY = screenH - CAT_H;
+      animation = requestAnimationFrame(tick);
+    });
+
+    return () => {
+      cancelAnimationFrame(animation);
+      cleanupCursor();
+      cleanupComeHere();
+      cleanupBubble();
+      cleanupEquip();
+      window.removeEventListener("mousemove", mouseMove);
+      canvas.removeEventListener("click", click);
+      if (bubbleTimer) clearTimeout(bubbleTimer);
+    };
+  }, []);
+
+  return (
+    <div className="cat-window">
+      <div ref={bubbleRef} className="cat-bubble" />
+      <canvas ref={canvasRef} width={CAT_W} height={CANVAS_H} />
+    </div>
+  );
+}

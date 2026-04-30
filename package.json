@@ -2,18 +2,41 @@
   "name": "desktop-cat",
   "version": "1.0.0",
   "description": "A desktop cat that wanders your screen",
-  "main": "main.js",
+  "main": "dist-electron/main/index.js",
+  "private": true,
   "scripts": {
-    "start": "electron ."
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build && electron-builder --win",
+    "pack": "npm run build && electron-builder --dir",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
   },
   "devDependencies": {
-    "electron": "^29.0.0"
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^6.0.1",
+    "electron": "^29.0.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.10",
+    "vite-plugin-electron": "^0.29.1",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^4.1.5"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.0",
     "@supabase/supabase-js": "^2.105.0",
     "electron-store": "^8.2.0",
     "lucide": "^1.9.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "screenshot-desktop": "^1.15.4"
   }
 }
