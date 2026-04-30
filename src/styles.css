@@ -17,6 +17,10 @@ body {
   overflow: hidden;
 }
 
+body.cat-route {
+  background: transparent;
+}
+
 button,
 input {
   font: inherit;

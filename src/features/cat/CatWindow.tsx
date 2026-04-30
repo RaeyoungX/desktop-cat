@@ -6,6 +6,11 @@ const CANVAS_H = 210;
 const WALK_SPEED = 1.5;
 
 type CatState = "walk" | "approach" | "sit" | "sleep" | "loaf" | "peek" | "box";
+type ProcessedSprite = {
+  canvas: HTMLCanvasElement;
+  frameW: number;
+  frameH: number;
+};
 
 const STATE_DURATION: Record<CatState, { min: number; max: number }> = {
   walk: { min: 4000, max: 12000 },
@@ -47,9 +52,43 @@ function useImage(src: string): HTMLImageElement {
   return img;
 }
 
+function loadTransparentSprite(src: string, frames: number): Promise<ProcessedSprite> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) {
+        resolve({ canvas, frameW: img.naturalWidth / frames, frameH: img.naturalHeight });
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const whiteness = Math.min(data[i], data[i + 1], data[i + 2]);
+        if (whiteness > 180) {
+          data[i + 3] = Math.round(255 * Math.max(0, 1 - (whiteness - 180) / 75));
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+      resolve({ canvas, frameW: img.naturalWidth / frames, frameH: img.naturalHeight });
+    };
+    img.src = src;
+  });
+}
+
 export function CatWindow() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const bubbleRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    document.body.classList.add("cat-route");
+    return () => document.body.classList.remove("cat-route");
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -79,15 +118,14 @@ export function CatWindow() {
     let animation = 0;
     let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
     let lastIgnore = true;
+    let cancelled = false;
 
     const images = {
-      walk: useImage("/assets/walk.png"),
-      sit: useImage("/assets/sit.png"),
-      sleep: useImage("/assets/sleep.png"),
       loaf: useImage("/assets/cat-loaf.png"),
       peek: useImage("/assets/cat-peek.png"),
       box: useImage("/assets/cat-box.png"),
     };
+    const sprites: Partial<Record<"walk" | "sit" | "sleep", ProcessedSprite>> = {};
 
     function showBubble(text: string, ms = 3200) {
       if (bubbleTimer) clearTimeout(bubbleTimer);
@@ -115,16 +153,18 @@ export function CatWindow() {
       }
 
       if (state === "walk" || state === "approach") {
-        const image = images.walk;
+        const sprite = sprites.walk;
         const frames = 4;
-        const frameW = image.naturalWidth ? image.naturalWidth / frames : 1;
         const frame = Math.floor(timestamp / 120) % frames;
-        if (image.complete && image.naturalWidth) {
-          ctx.drawImage(image, frame * frameW, 0, frameW, image.naturalHeight, 6, CANVAS_H - CAT_H, CAT_W - 12, CAT_H);
+        if (sprite) {
+          ctx.drawImage(sprite.canvas, frame * sprite.frameW, 0, sprite.frameW, sprite.frameH, 6, CANVAS_H - CAT_H, CAT_W - 12, CAT_H);
         }
       } else {
-        const image = state === "sit" ? images.sit : state === "sleep" ? images.sleep : images[state];
-        if (image.complete && image.naturalWidth) {
+        const sprite = state === "sit" ? sprites.sit : state === "sleep" ? sprites.sleep : null;
+        const image = state !== "sit" && state !== "sleep" ? images[state] : null;
+        if (sprite) {
+          ctx.drawImage(sprite.canvas, 0, 0, sprite.frameW, sprite.frameH, 0, CANVAS_H - CAT_H, CAT_W, CAT_H);
+        } else if (image?.complete && image.naturalWidth) {
           ctx.drawImage(image, 0, CANVAS_H - CAT_H, CAT_W, CAT_H);
         }
       }
@@ -232,7 +272,16 @@ export function CatWindow() {
     window.addEventListener("mousemove", mouseMove);
     canvas.addEventListener("click", click);
 
-    void window.cat.getScreenSize().then((size) => {
+    void Promise.all([
+      loadTransparentSprite("/assets/walk.png", 4),
+      loadTransparentSprite("/assets/sit.png", 1),
+      loadTransparentSprite("/assets/sleep.png", 2),
+      window.cat.getScreenSize(),
+    ]).then(([walk, sit, sleep, size]) => {
+      if (cancelled) return;
+      sprites.walk = walk;
+      sprites.sit = sit;
+      sprites.sleep = sleep;
       screenW = size.width;
       screenH = size.height;
       originX = size.originX || 0;
@@ -243,6 +292,7 @@ export function CatWindow() {
     });
 
     return () => {
+      cancelled = true;
       cancelAnimationFrame(animation);
       cleanupCursor();
       cleanupComeHere();
