@@ -29,6 +29,7 @@ const api = {
     getEquipped: (): Promise<string[]> => ipcRenderer.invoke("cat:get-equipped"),
     onCursor: (cb: Listener<{ x: number; y: number }>): (() => void) => onChannel("cat:cursor", cb),
     onComeHere: (cb: Listener<{ x: number; y: number }>): (() => void) => onChannel("cat:come-here", cb),
+    onResumeWander: (cb: Listener<void>): (() => void) => onChannel("cat:resume-wander", cb),
     onEquipItems: (cb: Listener<string[]>): (() => void) => onChannel("cat:equip-items", cb),
     onShowBubble: (cb: Listener<string>): (() => void) => onChannel("cat:show-bubble", cb),
   },
@@ -50,6 +51,7 @@ contextBridge.exposeInMainWorld("desktopCat", api);
 contextBridge.exposeInMainWorld("cat", {
   onCursor: api.cat.onCursor,
   onComeHere: api.cat.onComeHere,
+  onResumeWander: api.cat.onResumeWander,
   onEquipItems: api.cat.onEquipItems,
   onShowBubble: api.cat.onShowBubble,
   move: api.cat.move,

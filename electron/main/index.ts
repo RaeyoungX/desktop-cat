@@ -180,6 +180,7 @@ const detector = new VisionDetector({
     }
   },
   onFocused: () => {
+    sendToCat("cat:resume-wander", undefined);
     sendToCat("cat:show-bubble", "很好，继续。");
   },
   onStatus: (message) => {

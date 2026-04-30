@@ -13,22 +13,35 @@ type ProcessedSprite = {
 };
 
 const STATE_DURATION: Record<CatState, { min: number; max: number }> = {
-  walk: { min: 4000, max: 12000 },
+  walk: { min: 3000, max: 8500 },
   approach: { min: 4000, max: 12000 },
-  sit: { min: 5000, max: 14000 },
-  sleep: { min: 18000, max: 50000 },
-  loaf: { min: 8000, max: 20000 },
-  peek: { min: 3000, max: 7000 },
-  box: { min: 10000, max: 25000 },
+  sit: { min: 4500, max: 11000 },
+  sleep: { min: 9000, max: 20000 },
+  loaf: { min: 6500, max: 15000 },
+  peek: { min: 2500, max: 6000 },
+  box: { min: 7000, max: 16000 },
 };
 
 const TRANSITIONS: Record<string, Array<{ state: CatState; weight: number }>> = {
-  walk: [{ state: "sit", weight: 60 }, { state: "loaf", weight: 20 }, { state: "walk", weight: 20 }],
-  sit: [{ state: "walk", weight: 45 }, { state: "sleep", weight: 35 }, { state: "loaf", weight: 20 }],
-  sleep: [{ state: "sit", weight: 85 }, { state: "sleep", weight: 15 }],
-  loaf: [{ state: "walk", weight: 40 }, { state: "sleep", weight: 30 }, { state: "sit", weight: 30 }],
-  peek: [{ state: "sit", weight: 60 }, { state: "walk", weight: 40 }],
-  box: [{ state: "sit", weight: 50 }, { state: "walk", weight: 30 }, { state: "sleep", weight: 20 }],
+  walk: [
+    { state: "sit", weight: 32 },
+    { state: "loaf", weight: 20 },
+    { state: "peek", weight: 18 },
+    { state: "box", weight: 10 },
+    { state: "sleep", weight: 8 },
+    { state: "walk", weight: 12 },
+  ],
+  sit: [
+    { state: "walk", weight: 42 },
+    { state: "sleep", weight: 20 },
+    { state: "loaf", weight: 18 },
+    { state: "peek", weight: 14 },
+    { state: "box", weight: 6 },
+  ],
+  sleep: [{ state: "sit", weight: 70 }, { state: "loaf", weight: 15 }, { state: "walk", weight: 15 }],
+  loaf: [{ state: "walk", weight: 38 }, { state: "sleep", weight: 22 }, { state: "sit", weight: 22 }, { state: "peek", weight: 18 }],
+  peek: [{ state: "sit", weight: 30 }, { state: "walk", weight: 55 }, { state: "loaf", weight: 15 }],
+  box: [{ state: "sit", weight: 42 }, { state: "walk", weight: 35 }, { state: "sleep", weight: 23 }],
 };
 
 function rand(min: number, max: number): number {
@@ -114,6 +127,7 @@ export function CatWindow() {
     let lastY = -1;
     let cursorX = -9999;
     let cursorY = -9999;
+    let alertLocked = false;
     let equipped: string[] = [];
     let animation = 0;
     let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -205,7 +219,7 @@ export function CatWindow() {
           catX = screenW - CAT_W;
           dir = -1;
         }
-        if (now > stateUntil) {
+        if (!alertLocked && now > stateUntil) {
           const cursorLocalX = cursorX - originX;
           if (cursorLocalX > 0 && cursorLocalX < screenW && Math.random() < 0.25) {
             approachTargetX = Math.max(0, Math.min(screenW - CAT_W, cursorLocalX - CAT_W / 2));
@@ -223,13 +237,16 @@ export function CatWindow() {
           catX = approachTargetX;
           catY = approachTargetY;
           setState("sit");
+          if (alertLocked) {
+            stateUntil = Number.POSITIVE_INFINITY;
+          }
         } else {
           const speed = WALK_SPEED * 1.7;
           catX += (dx / dist) * speed;
           catY += (dy / dist) * speed;
           dir = dx >= 0 ? 1 : -1;
         }
-      } else if (now > stateUntil) {
+      } else if (!alertLocked && now > stateUntil) {
         catY = screenH - CAT_H;
         setState(nextState(state));
       }
@@ -250,10 +267,16 @@ export function CatWindow() {
       cursorY = pos.y;
     });
     const cleanupComeHere = window.cat.onComeHere((cursor) => {
+      alertLocked = true;
       approachTargetX = Math.max(0, Math.min(screenW - CAT_W, cursor.x - originX - CAT_W / 2));
       approachTargetY = Math.max(0, Math.min(screenH - CAT_H, cursor.y - originY - CAT_H / 2));
       setState("approach");
       showBubble("喵，在干嘛呢？", 4000);
+    });
+    const cleanupResume = window.cat.onResumeWander(() => {
+      alertLocked = false;
+      catY = screenH - CAT_H;
+      setState("walk");
     });
     const cleanupBubble = window.cat.onShowBubble((text) => showBubble(text));
     const cleanupEquip = window.cat.onEquipItems((items) => {
@@ -296,6 +319,7 @@ export function CatWindow() {
       cancelAnimationFrame(animation);
       cleanupCursor();
       cleanupComeHere();
+      cleanupResume();
       cleanupBubble();
       cleanupEquip();
       window.removeEventListener("mousemove", mouseMove);
