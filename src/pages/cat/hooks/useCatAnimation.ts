@@ -160,6 +160,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
 
     let catX = 0;
     let catY = 0;
+    let groundY = 0;
     let screenW = 1920;
     let screenH = 1080;
     let originX = 0;
@@ -173,6 +174,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     let lastX = -1;
     let lastY = -1;
     let currentFrame = 0;
+    let fixedFrame: number | null = null;
     let lastFrameMs = 0;
     let prevState: CatState | null = null;
     let transitionStart = 0;
@@ -209,6 +211,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
       transitionAlpha = 0;
       state = next;
       currentFrame = 0;
+      fixedFrame = next === "sit" ? Math.floor(Math.random() * (CAT_SPRITE_CONFIGS.sit?.frames ?? 1)) : null;
       lastFrameMs = 0;
       const duration = STATE_DURATION[next] ?? { min: 4000, max: 10000 };
       stateUntil = Date.now() + rand(duration.min, duration.max);
@@ -249,7 +252,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
         ctx.scale(-1, 1);
       }
       if (cfg && spriteData) {
-        drawSprite(spriteData, drawStateName === state ? currentFrame : 0);
+        drawSprite(spriteData, drawStateName === state ? fixedFrame ?? currentFrame : 0);
       } else {
         const img = CAT_STATIC_SRCS[drawStateName] ? staticImgs[drawStateName] : undefined;
         if (img && img.complete && img.naturalWidth > 0) {
@@ -332,7 +335,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
       const cfg = CAT_SPRITE_CONFIGS[state];
       if (cfg) {
         const duration = cfg.frameDurations ? cfg.frameDurations[currentFrame] : 1000 / (cfg.fps ?? 8);
-        if (timestamp - lastFrameMs > duration) {
+        if (fixedFrame === null && timestamp - lastFrameMs > duration) {
           currentFrame = (currentFrame + 1) % cfg.frames;
           lastFrameMs = timestamp;
         }
@@ -360,7 +363,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
 
       if (state === "walk") {
         catX += WALK_SPEED * dir;
-        catY = screenH - CAT_SPRITE_HEIGHT;
+        catY = groundY;
         if (catX <= 0) {
           catX = 0;
           dir = 1;
@@ -375,7 +378,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
           const inRange = cursorLocalX > 0 && cursorLocalX < screenW;
           if (inRange && Math.random() < 0.35) {
             approachTargetX = Math.max(0, Math.min(screenW - CAT_CANVAS_WIDTH, cursorScreenX));
-            approachTargetY = screenH - CAT_SPRITE_HEIGHT;
+            approachTargetY = groundY;
             setState("approach");
           } else {
             setState(nextState("walk"));
@@ -397,7 +400,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
           dir = dx >= 0 ? 1 : -1;
         }
       } else if (!alertLocked && now > stateUntil) {
-        catY = screenH - CAT_SPRITE_HEIGHT;
+        catY = groundY;
         setState(nextState(state));
       }
 
@@ -424,7 +427,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     });
     const cleanupResume = window.cat.onResumeWander(() => {
       alertLocked = false;
-      catY = screenH - CAT_SPRITE_HEIGHT;
+      catY = groundY;
       setState("walk");
     });
     const cleanupBubble = window.cat.onShowBubble((text) => showBubble(text, 3500));
@@ -462,6 +465,8 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     const stopDragging = () => {
       if (!dragging) return;
       dragging = false;
+      groundY = Math.max(0, Math.min(screenH - CAT_CANVAS_HEIGHT, catY));
+      approachTargetY = groundY;
       const over = isOverCat(Math.max(0, Math.min(CAT_CANVAS_WIDTH - 1, dragOffsetX)), Math.max(0, Math.min(CAT_CANVAS_HEIGHT - 1, dragOffsetY)));
       lastIgnore = !over;
       window.cat.setMouseIgnore(!over);
@@ -489,7 +494,8 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
       originX = size.originX || 0;
       originY = size.originY || 0;
       catX = Math.floor(screenW / 2 - CAT_CANVAS_WIDTH / 2);
-      catY = screenH - CAT_SPRITE_HEIGHT;
+      groundY = screenH - CAT_SPRITE_HEIGHT;
+      catY = groundY;
       for (const [key, src] of Object.entries(CAT_STATIC_SRCS)) {
         staticImgs[key] = loadImage(src);
       }
