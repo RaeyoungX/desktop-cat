@@ -7,9 +7,17 @@ import {
   CAT_STATIC_SRCS,
   type CatState,
 } from "../catSprites";
-
-const WALK_SPEED = 1.5;
-const TRANSITION_MS = 300;
+import {
+  IDLE_LINES,
+  STATE_DURATION,
+  TRANSITION_MS,
+  WALK_SPEED,
+  alertTargetForCursor,
+  fixedFrameForState,
+  groundAfterDrag,
+  nextState,
+  rand,
+} from "../catMotion";
 
 type SpriteData = {
   canvas: HTMLCanvasElement;
@@ -26,54 +34,6 @@ type UseCatAnimationOptions = {
   bubbleRef: RefObject<HTMLDivElement | null>;
   canvasRef: RefObject<HTMLCanvasElement | null>;
 };
-
-const TRANSITIONS: Record<string, Array<{ state: CatState; weight: number }>> = {
-  walk: [
-    { state: "sit", weight: 42 },
-    { state: "loaf", weight: 20 },
-    { state: "peek", weight: 12 },
-    { state: "box", weight: 6 },
-    { state: "walk", weight: 20 },
-  ],
-  sit: [
-    { state: "walk", weight: 40 },
-    { state: "sleep", weight: 28 },
-    { state: "loaf", weight: 16 },
-    { state: "peek", weight: 10 },
-    { state: "sit", weight: 6 },
-  ],
-  sleep: [{ state: "sit", weight: 80 }, { state: "walk", weight: 12 }, { state: "sleep", weight: 8 }],
-  loaf: [{ state: "walk", weight: 36 }, { state: "sleep", weight: 28 }, { state: "sit", weight: 24 }, { state: "peek", weight: 12 }],
-  peek: [{ state: "sit", weight: 50 }, { state: "walk", weight: 50 }],
-  box: [{ state: "sit", weight: 50 }, { state: "walk", weight: 30 }, { state: "sleep", weight: 20 }],
-};
-
-const STATE_DURATION: Record<CatState, { min: number; max: number }> = {
-  walk: { min: 5000, max: 14000 },
-  approach: { min: 4000, max: 12000 },
-  sit: { min: 5000, max: 14000 },
-  sleep: { min: 18000, max: 50000 },
-  loaf: { min: 8000, max: 20000 },
-  peek: { min: 3000, max: 7000 },
-  box: { min: 10000, max: 25000 },
-};
-
-const IDLE_LINES = ["喵。", "继续哦。", "我在巡逻。", "别走神啦。"];
-
-function rand(min: number, max: number): number {
-  return min + Math.random() * (max - min);
-}
-
-function nextState(current: CatState): CatState {
-  const options = TRANSITIONS[current] ?? [{ state: "walk", weight: 1 }];
-  const total = options.reduce((sum, option) => sum + option.weight, 0);
-  let cursor = Math.random() * total;
-  for (const option of options) {
-    cursor -= option.weight;
-    if (cursor <= 0) return option.state;
-  }
-  return options[0].state;
-}
 
 function loadSprite(src: string, frames: number): Promise<SpriteData> {
   return new Promise((resolve) => {
@@ -211,7 +171,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
       transitionAlpha = 0;
       state = next;
       currentFrame = 0;
-      fixedFrame = next === "sit" ? Math.floor(Math.random() * (CAT_SPRITE_CONFIGS.sit?.frames ?? 1)) : null;
+      fixedFrame = fixedFrameForState(next);
       lastFrameMs = 0;
       const duration = STATE_DURATION[next] ?? { min: 4000, max: 10000 };
       stateUntil = Date.now() + rand(duration.min, duration.max);
@@ -420,8 +380,9 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     });
     const cleanupComeHere = window.cat.onComeHere((cursor) => {
       alertLocked = true;
-      approachTargetX = Math.max(0, Math.min(screenW - CAT_CANVAS_WIDTH, cursor.x - originX - CAT_CANVAS_WIDTH / 2));
-      approachTargetY = Math.max(0, Math.min(screenH - CAT_SPRITE_HEIGHT, cursor.y - originY - CAT_SPRITE_HEIGHT / 2));
+      const target = alertTargetForCursor(cursor, { screenW, screenH, originX, originY });
+      approachTargetX = target.x;
+      approachTargetY = target.y;
       setState("approach");
       showBubble("喵，在干嘛呢？", 4000);
     });
@@ -465,7 +426,7 @@ export function useCatAnimation({ bubbleRef, canvasRef }: UseCatAnimationOptions
     const stopDragging = () => {
       if (!dragging) return;
       dragging = false;
-      groundY = Math.max(0, Math.min(screenH - CAT_CANVAS_HEIGHT, catY));
+      groundY = groundAfterDrag(catY, screenH);
       approachTargetY = groundY;
       const over = isOverCat(Math.max(0, Math.min(CAT_CANVAS_WIDTH - 1, dragOffsetX)), Math.max(0, Math.min(CAT_CANVAS_HEIGHT - 1, dragOffsetY)));
       lastIgnore = !over;

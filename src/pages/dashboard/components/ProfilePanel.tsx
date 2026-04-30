@@ -11,6 +11,7 @@ type ProfilePanelProps = {
   cloudBusy: boolean;
   cloudStatus: string;
   cloudUser: CloudUser | null;
+  distractThreshold: 1 | 2 | 3;
   points: number;
   quota: QuotaSnapshot | null;
   sessions: FocusSession[];
@@ -18,6 +19,7 @@ type ProfilePanelProps = {
   onPasswordChange: (value: string) => void;
   onPasswordConfirmChange: (value: string) => void;
   onRefreshCloud: () => void;
+  onDistractThresholdChange: (value: 1 | 2 | 3) => void;
   onSignIn: (mode: "signin" | "signup") => void;
   onSignOut: () => void;
 };
@@ -29,6 +31,7 @@ export function ProfilePanel({
   cloudBusy,
   cloudStatus,
   cloudUser,
+  distractThreshold,
   points,
   quota,
   sessions,
@@ -36,6 +39,7 @@ export function ProfilePanel({
   onPasswordChange,
   onPasswordConfirmChange,
   onRefreshCloud,
+  onDistractThresholdChange,
   onSignIn,
   onSignOut,
 }: ProfilePanelProps) {
@@ -98,6 +102,26 @@ export function ProfilePanel({
           <span>本月已用 {quota.usedHours} 小时，重置时间 {new Date(quota.resetAt).toLocaleDateString()}</span>
         </section>
       ) : null}
+
+      <section className="panel sensitivity-panel">
+        <div className="section-head"><span>提醒灵敏度</span><strong>连续 {distractThreshold} 次</strong></div>
+        <div className="segmented three-way">
+          {[
+            { value: 1 as const, label: "高" },
+            { value: 2 as const, label: "标准" },
+            { value: 3 as const, label: "温和" },
+          ].map((option) => (
+            <button
+              key={option.value}
+              className={distractThreshold === option.value ? "active" : ""}
+              onClick={() => onDistractThresholdChange(option.value)}
+              type="button"
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="stat-grid">
         <div><Star size={15} /><strong>{points}</strong><span>累计积分</span></div>

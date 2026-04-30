@@ -38,6 +38,10 @@ const api = {
     openDashboard: (): void => ipcRenderer.send("app:open-dashboard"),
     quit: (): void => ipcRenderer.send("app:quit"),
   },
+  settings: {
+    getDistractThreshold: (): Promise<1 | 2 | 3> => ipcRenderer.invoke("settings:get-distract-threshold"),
+    setDistractThreshold: (value: 1 | 2 | 3): Promise<1 | 2 | 3> => ipcRenderer.invoke("settings:set-distract-threshold", value),
+  },
   auth: {
     session: (): Promise<unknown> => ipcRenderer.invoke("auth:session"),
     signup: (payload: { email: string; password: string }): Promise<unknown> => ipcRenderer.invoke("auth:signup", payload),

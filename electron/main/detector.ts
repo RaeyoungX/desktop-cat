@@ -3,7 +3,8 @@ import type { FocusStatus, TimelineEntry, VisionResult } from "../../src/shared/
 import { analyzeScreen } from "./vision-client";
 
 export const DETECTION_INTERVAL_MS = 30_000;
-export const DISTRACT_THRESHOLD = 2;
+export const DEFAULT_DISTRACT_THRESHOLD = 2;
+export type DistractThreshold = 1 | 2 | 3;
 
 export type DetectorState = {
   consecutiveDistracted: number;
@@ -15,10 +16,18 @@ export type DetectorTransition = DetectorState & {
   event: "none" | "distracted" | "focused";
 };
 
-export function applyVisionResult(state: DetectorState, status: FocusStatus): DetectorTransition {
+export function normalizeDistractThreshold(value: unknown): DistractThreshold {
+  return value === 1 || value === 2 || value === 3 ? value : DEFAULT_DISTRACT_THRESHOLD;
+}
+
+export function applyVisionResult(
+  state: DetectorState,
+  status: FocusStatus,
+  threshold: DistractThreshold = DEFAULT_DISTRACT_THRESHOLD,
+): DetectorTransition {
   if (status === "distracted") {
     const consecutiveDistracted = state.consecutiveDistracted + 1;
-    if (consecutiveDistracted >= DISTRACT_THRESHOLD && !state.alerting) {
+    if (consecutiveDistracted >= threshold && !state.alerting) {
       return {
         consecutiveDistracted,
         alerting: true,
@@ -53,6 +62,8 @@ export type DetectorCallbacks = {
 export type DetectorOptions = DetectorCallbacks & {
   getAccessToken: () => string | undefined;
   getEndpoint: () => string | undefined;
+  getThreshold?: () => DistractThreshold;
+  getIdleSeconds?: () => number;
 };
 
 type ScreenshotCapture = (options: { format: "jpg"; screen?: number }) => Promise<Buffer>;
@@ -82,6 +93,16 @@ export async function capturePrimaryScreenshot(capture: ScreenshotCapture = scre
   }
 }
 
+function isScreenPermissionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    message.includes("screen recording")
+    || message.includes("permission")
+    || message.includes("not authorized")
+    || message.includes("access denied")
+  );
+}
+
 export class VisionDetector {
   private timer: ReturnType<typeof setInterval> | null = null;
   private currentTask = "";
@@ -91,6 +112,7 @@ export class VisionDetector {
     alerting: false,
     sessionDistractCount: 0,
   };
+  private mode: "vision" | "behaviorOnly" = "vision";
 
   constructor(private readonly options: DetectorOptions) {}
 
@@ -103,12 +125,14 @@ export class VisionDetector {
       alerting: false,
       sessionDistractCount: 0,
     };
+    this.mode = "vision";
     logDetector("started", {
       sessionId,
       taskLength: taskName.length,
       firstCheckInMs: DETECTION_INTERVAL_MS,
       endpoint: this.options.getEndpoint() ?? "",
       hasAccessToken: Boolean(this.options.getAccessToken()),
+      threshold: this.options.getThreshold?.() ?? DEFAULT_DISTRACT_THRESHOLD,
     });
     this.timer = setInterval(() => void this.runCheck(), DETECTION_INTERVAL_MS);
   }
@@ -126,6 +150,7 @@ export class VisionDetector {
     this.sessionId = "";
     this.state.consecutiveDistracted = 0;
     this.state.alerting = false;
+    this.mode = "vision";
   }
 
   getDistractCount(): number {
@@ -134,6 +159,10 @@ export class VisionDetector {
 
   async runCheck(): Promise<void> {
     if (!this.currentTask || !this.sessionId) return;
+    if (this.mode === "behaviorOnly") {
+      this.runBehaviorCheck();
+      return;
+    }
 
     const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let imageBuffer: Buffer | null = null;
@@ -151,6 +180,12 @@ export class VisionDetector {
         checkId,
         message: error instanceof Error ? error.message : "unknown",
       });
+      if (isScreenPermissionError(error)) {
+        this.mode = "behaviorOnly";
+        this.options.onStatus?.("屏幕录制权限未开启，已切换低精度行为检测。");
+        this.runBehaviorCheck();
+        return;
+      }
       this.options.onStatus?.(`截图失败：${error instanceof Error ? error.message : "unknown"}`);
       return;
     } finally {
@@ -193,7 +228,7 @@ export class VisionDetector {
     });
     void this.options.onAnalyzed?.(result, this.sessionId);
 
-    const next = applyVisionResult(this.state, result.status);
+    const next = applyVisionResult(this.state, result.status, this.options.getThreshold?.() ?? DEFAULT_DISTRACT_THRESHOLD);
     this.state = {
       consecutiveDistracted: next.consecutiveDistracted,
       alerting: next.alerting,
@@ -205,5 +240,22 @@ export class VisionDetector {
     } else if (next.event === "focused") {
       this.options.onFocused?.(result);
     }
+  }
+
+  private runBehaviorCheck(): void {
+    const idleSeconds = Math.max(0, Math.round(this.options.getIdleSeconds?.() ?? 0));
+    this.state = {
+      ...this.state,
+      consecutiveDistracted: 0,
+      alerting: false,
+    };
+    this.options.onActivity?.({
+      time: Date.now(),
+      status: "uncertain",
+      activity: "低精度行为",
+      reason: idleSeconds >= 90
+        ? `Screen permission denied; user idle for ${idleSeconds}s.`
+        : "Screen permission denied; behavior-only fallback active.",
+    });
   }
 }

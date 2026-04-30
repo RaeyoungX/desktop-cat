@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, Menu, screen, Tray } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu, powerMonitor, screen, Tray } from "electron";
 import path from "node:path";
 import type { ActiveSession, FocusSession, TimelineEntry, TodayTask } from "../../src/shared/types";
 import { VisionDetector } from "./detector";
@@ -13,8 +13,10 @@ import {
   getTodayTasks,
   getVisionAnalyzeUrl,
   getApiBaseUrl,
+  getDistractThreshold,
   saveTodayTasks,
   setEquippedItems,
+  setDistractThreshold,
 } from "./store";
 import { defaultVisionAnalyzeUrl } from "./vision-client";
 import { createTrayNativeImage } from "./tray-icon";
@@ -205,6 +207,8 @@ function distractMsg(count: number): string {
 const detector = new VisionDetector({
   getAccessToken: () => getAuthSession()?.access_token,
   getEndpoint: () => getVisionAnalyzeUrl() || defaultVisionAnalyzeUrl(),
+  getThreshold: () => getDistractThreshold(),
+  getIdleSeconds: () => powerMonitor.getSystemIdleTime(),
   onActivity: (entry: TimelineEntry) => {
     addTimelineEntry(entry);
     sendToDashboard("session:timeline-entry", entry);
@@ -331,6 +335,8 @@ function registerIpc(): void {
   ipcMain.handle("session:start", (_, task: { name: string; duration: number }) => startSession(task));
   ipcMain.handle("session:end", async () => endSession());
   ipcMain.handle("session:get", () => currentSession);
+  ipcMain.handle("settings:get-distract-threshold", () => getDistractThreshold());
+  ipcMain.handle("settings:set-distract-threshold", (_, value: unknown) => setDistractThreshold(value));
 
   ipcMain.handle("cat:equip-items", (_, items: string[]) => {
     const safe = setEquippedItems(items);

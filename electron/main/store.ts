@@ -2,6 +2,7 @@ import Store from "electron-store";
 import { todayKey } from "../../src/shared/date";
 import type { FocusSession, TimelineEntry, TodayTask } from "../../src/shared/types";
 import { loadTodayTasksFromBucket, makeTaskBucket, type TaskBucket } from "../../src/shared/tasks";
+import { DEFAULT_DISTRACT_THRESHOLD, normalizeDistractThreshold, type DistractThreshold } from "./detector";
 
 export type AuthSession = {
   access_token?: string;
@@ -24,6 +25,7 @@ type AppStore = {
   settings?: {
     apiBaseUrl?: string;
     visionAnalyzeUrl?: string;
+    distractThreshold?: DistractThreshold;
   };
 };
 
@@ -101,4 +103,14 @@ export function getApiBaseUrl(): string {
     || process.env.DESKTOP_CAT_API_URL
     || process.env.VITE_DESKTOP_CAT_API_URL
     || "https://jtotlqxlsjeiqmklbhmj.supabase.co/functions/v1";
+}
+
+export function getDistractThreshold(): DistractThreshold {
+  return normalizeDistractThreshold(store.get("settings.distractThreshold", DEFAULT_DISTRACT_THRESHOLD));
+}
+
+export function setDistractThreshold(value: unknown): DistractThreshold {
+  const threshold = normalizeDistractThreshold(value);
+  store.set("settings.distractThreshold", threshold);
+  return threshold;
 }

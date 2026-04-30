@@ -83,6 +83,7 @@ export function useDashboardState() {
   const [myRank, setMyRank] = useState<number | null>(null);
   const [shopItems, setShopItems] = useState<ShopItem[]>(CLOUD_SHOP_ITEMS);
   const [ownedItems, setOwnedItems] = useState<string[]>([]);
+  const [distractThreshold, setDistractThresholdState] = useState<1 | 2 | 3>(2);
 
   const refreshCloud = useCallback(async () => {
     const me = unwrap<unknown>(await window.desktopCat.auth.me());
@@ -135,12 +136,14 @@ export function useDashboardState() {
       window.desktopCat.billing.getPlans(),
       window.desktopCat.shopCloud.getItems(),
       window.desktopCat.auth.session(),
-    ]).then(([loadedTasks, loadedSessions, loadedTimeline, session, loadedEquipped, planPayload, shopPayload, authSession]) => {
+      window.desktopCat.settings.getDistractThreshold(),
+    ]).then(([loadedTasks, loadedSessions, loadedTimeline, session, loadedEquipped, planPayload, shopPayload, authSession, loadedThreshold]) => {
       setTasks(loadedTasks);
       setSessions(loadedSessions);
       setTimeline(loadedTimeline);
       setActiveSession(session);
       setEquipped(loadedEquipped);
+      setDistractThresholdState(loadedThreshold);
 
       const loadedPlans = unwrap<{ plans?: unknown[] }>(planPayload);
       if (loadedPlans.ok && Array.isArray(loadedPlans.data?.plans)) {
@@ -373,6 +376,11 @@ export function useDashboardState() {
     setPaymentOrder(null);
   }
 
+  async function setDistractThreshold(value: 1 | 2 | 3) {
+    const saved = await window.desktopCat.settings.setDistractThreshold(value);
+    setDistractThresholdState(saved);
+  }
+
   useEffect(() => {
     if (activeSession && remainingSeconds <= 0) {
       void finishSession();
@@ -392,6 +400,7 @@ export function useDashboardState() {
     customDuration,
     dailyStats,
     detectorStatus,
+    distractThreshold,
     duration,
     equipped,
     focusName,
@@ -429,6 +438,7 @@ export function useDashboardState() {
     setAuthPasswordConfirm,
     setBillingCycle,
     setCustomDuration,
+    setDistractThreshold,
     setDuration,
     setFocusName,
     setNewTaskText,

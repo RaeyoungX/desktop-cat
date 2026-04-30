@@ -105,9 +105,11 @@ export function DashboardPage() {
               cloudBusy={dashboard.cloudBusy}
               cloudStatus={dashboard.cloudStatus}
               cloudUser={dashboard.cloudUser}
+              distractThreshold={dashboard.distractThreshold}
               points={dashboard.points}
               quota={dashboard.quota}
               sessions={dashboard.sessions}
+              onDistractThresholdChange={(value) => void dashboard.setDistractThreshold(value)}
               onEmailChange={dashboard.setAuthEmail}
               onPasswordChange={dashboard.setAuthPassword}
               onPasswordConfirmChange={dashboard.setAuthPasswordConfirm}

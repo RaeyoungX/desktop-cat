@@ -2,7 +2,7 @@
 
 **版本**：v1.0  
 **栈**：Supabase Edge Functions（Deno · TypeScript）· Zod · Supabase Postgres & Auth  
-**Base URL**：以部署为准。**示例**：`https://api.desktopcat.app/v1`（自定义域反代至 Functions）；或直接 `https://<PROJECT_REF>.supabase.co/functions/v1/<edge-function>/v1`。**下文路径均为该 Base URL 之后的相对路径**。
+**Base URL**：以部署为准。**示例**：`https://api.desktopcat.app/v1`（自定义域反代至 Functions）；或直接 `https://<PROJECT_REF>.supabase.co/functions/v1/<edge-function>`。**下文路径按功能域描述；当前实现按 Edge Function 拆分部署**。
 
 ---
 
@@ -11,10 +11,10 @@
 ### Edge Functions 与路由
 
 - **服务端**：全部为 **Supabase Edge Functions**，**不再使用 Hono / 自建 Node HTTP 进程**。
-- **路由**：以下 `POST /auth/signup`、`GET /user/me` 等语义路径，实现上可选用 **单个网关 Function**（内部分发子路径）、或 **按域拆分多个 Function**（由反向代理拼装统一前缀）。
+- **路由**：按功能域拆分 Supabase Edge Functions，不使用单个 `desktop-api` 大网关。当前域包括 `auth`、`user`、`quota`、`sessions`、`stats`、`plans`、`subscription`、`payment`、`vision`、`shop`；若使用自定义域，可由反向代理拼装统一前缀。
 - **数据库**：读写 **Supabase Postgres**；需在 Functions 中使用 **Service Role** 的路径（如付费 Webhook 写订阅）必须服务端校验签名后执行，密钥仅存 **Edge Secrets**。
 - **校验**：推荐使用 **Zod** 解析 Body / Query。
-- **敏感配置**：`GEMINI_API_KEY`、`EPAY_PID`、`EPAY_KEY`、`EPAY_GATEWAY` 等通过 **Supabase Dashboard → Edge Functions → Secrets**（或 `supabase secrets set`）注入，在 Function 内 `Deno.env.get(...)` 读取。
+- **敏感配置**：`GCP_PROJECT_ID`、`GCP_PRIVATE_KEY`、`GCP_CLIENT_EMAIL`、`VERTEX_LOCATION`、`VISION_MODEL`、`EPAY_PID`、`EPAY_KEY`、`EPAY_GATEWAY` 等通过 **Supabase Dashboard → Edge Functions → Secrets**（或 `supabase secrets set`）注入，在 Function 内 `Deno.env.get(...)` 读取。
 - **日志**：使用 `console` / Deno 标准输出或 Supabase 仪表盘日志；**禁止**在日志中输出截图、任务全文、支付验签原文。
 
 ### 请求头
@@ -447,7 +447,7 @@ Authorization: Bearer <jwt>
 1. 创建 `orders` 记录：`pending`，金额为套餐现价快照。
 2. 以 `orders.id`（如 `CAT20260429001`）作为 **`out_trade_no`**。
 3. **Edge Function** 通过 **`fetch`** 请求易支付 **提交订单**接口（`EPAY_GATEWAY`）：`pid`、`key` 参与签名、`money`、`type`/`payment_method` 映射、`notify_url`（公网 HTTPS → `POST /payment/webhook/epay`）、可选 `return_url`、`out_trade_no`。**商户密钥不落客户端**。
-4. 将上游返回的 **二维码图片 URL、跳转链接、`urlscheme`、`qrimg` 原文**等统一归入响应字段 **`pay_url`**（见下）。
+4. 将上游返回的 `payurl` / PC-H5 链接归入 **`pay_url`**；将易支付原始 `qrcode` 归入 **`qr_code`**。注意：易支付 `qrcode` 是扫码内容 payload，**不是图片 URL**。
 
 **Response**
 
@@ -460,6 +460,8 @@ Authorization: Bearer <jwt>
     "currency": "CNY",
     "payment_method": "alipay",
     "pay_url": "https://pay.example-gateway.com/submit?id=...",
+    "qr_code": "alipays://platformapi/startapp?...",
+    "qr_code_url": null,
     "expires_at": "2026-04-29T13:30:00Z"
   }
 }
@@ -467,7 +469,9 @@ Authorization: Bearer <jwt>
 
 | 字段 | 说明 |
 |------|------|
-| `pay_url` | 用户完成支付所需入口：可展示为二维码、或 `shell.openExternal` 打开；**取代**原直连场景下的 `qr_code_url` 语义。若需兼容旧客户端，可在 JSON 响应中额外返回 `qr_code_url`，与 `pay_url` **同值**。 |
+| `pay_url` | 易支付返回的支付链接，可作为兜底打开入口，也可在没有 `qr_code` 时生成二维码。 |
+| `qr_code` | 易支付原始 `qrcode` 扫码 payload。客户端用本地 `qrcode` 库生成 data URL 图片展示。 |
+| `qr_code_url` | 兼容旧客户端字段。新实现不把 `qrcode` 写入此字段；没有图片 URL 时返回 `null`。 |
 
 ---
 
@@ -534,16 +538,61 @@ POST /payment/webhook/epay
 
 ### 6.4 Gemini Vision 代理（与本节支付并列，密钥不落客户端）
 
-桌面端 **不得** 携带 Gemini API Key。**Edge Function** 在已通过 JWT 鉴权、且用户仍有 AI 额度时响应：
+桌面端 **不得** 携带 Vertex/Gemini 密钥。`vision` Edge Function 在已通过 JWT 鉴权、且用户仍有 AI 额度时响应：
 
 ```
 POST /vision/analyze
 Authorization: Bearer <jwt>
 ```
 
-请求体沿用产品技术方案：**压缩后主屏截图 + 当前专注任务标题**（仅用于当次相关性判定，调用方不落库；**数据库不持久化截图**；日志仅记 `requestId`、`user_id` hash、耗时、模型、token、`status`，**不打印 base64**）。
+**Body**
 
-响应体与客户端状态机：**`focused` | `distracted` | `uncertain`** + `confidence` + `reason`（结构化输出）。客户端在单次分析成功后 **再调用 `POST /quota/report`**（见第三节）记入用量；若先做额度判断再调 Vision，可减少无效模型调用。
+```json
+{
+  "screenshotBase64": "/9j/4AAQSkZJRgABAQ...",
+  "mimeType": "image/jpeg",
+  "taskName": "写 React 组件",
+  "sessionId": "sess_abc123",
+  "checkId": "check_1777545000000_ab12cd",
+  "clientMeta": { "platform": "darwin" }
+}
+```
+
+**Response**
+
+```json
+{
+  "status": "focused",
+  "confidence": 0.86,
+  "activity": "写代码",
+  "reason": "The screen shows a code editor related to the task.",
+  "checkId": "check_1777545000000_ab12cd"
+}
+```
+
+**隐私与存储**
+
+- 截图只用于当次 Vision 判断；客户端 buffer/base64 分析后立即释放。
+- 服务端不写 Supabase Storage，不入库，不记录 base64，不记录完整任务全文。
+- 日志只记录 `requestId`、用户 hash、耗时、模型、状态和错误码。
+
+**Prompt 策略**
+
+- 正例：代码、文档、终端、设计稿、任务相关网页、会议、笔记、参考资料。
+- 反例：短视频、游戏、购物、社交信息流、明显无关聊天、娱乐内容。
+- 黑屏、锁屏、空白、切窗口、参考资料、无法判断均返回 `focused` 或 `uncertain`。
+- `uncertain` 在客户端按 focused 处理；误报成本高于漏报。
+
+**客户端检测契约**
+
+- 会话开始 30 秒后第一次检测，之后每 30 秒一次。
+- 截主屏，优先 `screen: 0`；若 display id 不可用，回退到默认截图。
+- 本地灵敏度 `distractThreshold` 支持 `1 | 2 | 3`，默认 2；连续达到阈值的 `distracted` 才触发猫咪提醒。
+- 任意一次 `focused` 或 `uncertain` 重置连续分心计数，并让猫咪恢复游走。
+- Edge Function 失败、无权限、额度耗尽时不触发提醒，只在 UI 显示检测暂停/不可用。
+- macOS 屏幕录制权限被拒时，客户端切换为低精度 `behaviorOnly` 行为检测，仅记录 `uncertain` 活动状态，不做语义分心提醒。
+
+客户端在单次分析成功后 **再调用 `POST /quota/report`**（见第三节）记入 30 秒用量；若先做额度判断再调 Vision，可减少无效模型调用。
 
 **限流**：与 §「限流策略」一致，使用 `rate_limit_buckets`，`bucket_key` 建议 `vision:user:{user_id}`；与 `POST /quota/report` 的 `quota:user:{user_id}` 分开计数。
 
