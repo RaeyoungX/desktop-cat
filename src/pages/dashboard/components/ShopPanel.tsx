@@ -33,7 +33,7 @@ export function ShopPanel({ cloudUser, equipped, ownedItems, points, shopItems, 
       <section className="shop-list">
         {shopItems.map((item) => {
           const Icon = ICONS[item.icon as keyof typeof ICONS] ?? Gift;
-          const owned = cloudUser ? ownedItems.includes(item.id) : true;
+          const owned = cloudUser ? ownedItems.includes(item.id) : false;
           const isEquipped = equipped.includes(item.id);
           const canBuy = cloudUser && !owned && points >= item.cost;
           return (
@@ -45,7 +45,9 @@ export function ShopPanel({ cloudUser, equipped, ownedItems, points, shopItems, 
                 <strong>{item.name}</strong>
                 <span>{item.desc} · {item.cost} 积分</span>
               </div>
-              {owned ? (
+              {!cloudUser ? (
+                <button onClick={() => onToggleEquip(item.id)}>登录后装备</button>
+              ) : owned ? (
                 <button onClick={() => onToggleEquip(item.id)}>{isEquipped ? "取下" : "装备"}</button>
               ) : (
                 <button disabled={!canBuy} onClick={() => onBuyItem(item.id)}>

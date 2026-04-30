@@ -279,6 +279,12 @@ export function useDashboardState() {
   }
 
   async function toggleEquip(id: string) {
+    if (!cloudUser) {
+      setCloudStatus("请先登录，登录后可购买并同步云端装扮。");
+      setActiveTab("profile");
+      return;
+    }
+
     if (cloudUser) {
       const action = equipped.includes(id) ? "unequip" : "equip";
       const result = unwrap<{ equipped?: string[] }>(await window.desktopCat.shopCloud.equip(id, action));
@@ -290,12 +296,15 @@ export function useDashboardState() {
       }
       return;
     }
-
-    const next = equipped.includes(id) ? equipped.filter((item) => item !== id) : [...equipped, id];
-    setEquipped(await window.desktopCat.cat.equipItems(next));
   }
 
   async function buyItem(id: string) {
+    if (!cloudUser) {
+      setCloudStatus("请先登录，登录后可购买并同步云端装扮。");
+      setActiveTab("profile");
+      return;
+    }
+
     const result = unwrap<{ owned?: string[]; points_remaining?: number }>(await window.desktopCat.shopCloud.buy(id));
     if (!result.ok) {
       setCloudStatus(result.error?.message ?? "购买失败");
