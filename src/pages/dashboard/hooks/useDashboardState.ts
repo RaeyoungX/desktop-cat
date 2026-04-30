@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useInterval } from "../../../hooks/useInterval";
 import {
-  CLOUD_PLANS,
-  CLOUD_SHOP_ITEMS,
   normalizeCloudUser,
   normalizeLeaderboardEntry,
   normalizeOrder,
@@ -74,14 +72,14 @@ export function useDashboardState() {
   const [cloudStatus, setCloudStatus] = useState("离线可用");
   const [cloudBusy, setCloudBusy] = useState(false);
   const [quota, setQuota] = useState<QuotaSnapshot | null>(null);
-  const [plans, setPlans] = useState<CloudPlan[]>(CLOUD_PLANS);
+  const [plans, setPlans] = useState<CloudPlan[]>([]);
   const [subscription, setSubscription] = useState<CloudSubscription | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("alipay");
   const [paymentOrder, setPaymentOrder] = useState<PaymentOrder | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
-  const [shopItems, setShopItems] = useState<ShopItem[]>(CLOUD_SHOP_ITEMS);
+  const [shopItems, setShopItems] = useState<ShopItem[]>([]);
   const [ownedItems, setOwnedItems] = useState<string[]>([]);
   const [distractThreshold, setDistractThresholdState] = useState<1 | 2 | 3>(2);
 
@@ -152,7 +150,7 @@ export function useDashboardState() {
 
       const loadedShop = unwrap<{ items?: unknown[] }>(shopPayload);
       if (loadedShop.ok && Array.isArray(loadedShop.data?.items)) {
-        setShopItems(loadedShop.data.items.map(normalizeShopItem));
+        setShopItems(loadedShop.data.items.map(normalizeShopItem).filter((item): item is ShopItem => item !== null));
       }
 
       if (authSession && typeof authSession === "object" && "access_token" in authSession) {

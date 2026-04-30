@@ -58,6 +58,7 @@ describe("cloud plan helpers", () => {
       iconColor: "#111",
       iconBg: "#eee",
     });
+    expect(normalizeShopItem({ name: "Broken row" })).toBeNull();
     expect(normalizeSubscription({ plan: "power", billing: "yearly", current_period_end: "2027-04-30" })).toMatchObject({
       plan: "power",
       billing: "yearly",

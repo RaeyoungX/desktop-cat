@@ -154,12 +154,14 @@ export function buildQuotaSnapshot(planId: unknown, usedSeconds: number, date = 
 
 export function normalizePlan(raw: unknown): CloudPlan {
   const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+  const id = normalizePlanId(item.id);
+  const knownPlan = getPlan(id);
   return {
-    id: normalizePlanId(item.id),
-    name: typeof item.name === "string" ? item.name : getPlan(item.id).name,
-    quotaHours: Number(item.quota_hours ?? item.quotaHours ?? getPlan(item.id).quotaHours),
-    priceMonthly: Number(item.price_monthly ?? item.priceMonthly ?? getPlan(item.id).priceMonthly),
-    priceYearly: Number(item.price_yearly ?? item.priceYearly ?? getPlan(item.id).priceYearly),
+    id,
+    name: typeof item.name === "string" && item.name.trim() ? item.name : knownPlan.name,
+    quotaHours: Number(item.quota_hours ?? item.quotaHours ?? knownPlan.quotaHours),
+    priceMonthly: Number(item.price_monthly ?? item.priceMonthly ?? knownPlan.priceMonthly),
+    priceYearly: Number(item.price_yearly ?? item.priceYearly ?? knownPlan.priceYearly),
   };
 }
 
@@ -200,17 +202,19 @@ export function normalizeCloudUser(raw: unknown): CloudUser | null {
   };
 }
 
-export function normalizeShopItem(raw: unknown): ShopItem {
+export function normalizeShopItem(raw: unknown): ShopItem | null {
   const item = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
-  const fallback = CLOUD_SHOP_ITEMS.find((candidate) => candidate.id === item.id) ?? CLOUD_SHOP_ITEMS[0];
+  const id = typeof item.id === "string" ? item.id.trim() : "";
+  if (!id) return null;
+  const fallback = CLOUD_SHOP_ITEMS.find((candidate) => candidate.id === id);
   return {
-    id: String(item.id ?? fallback.id),
-    name: String(item.name ?? fallback.name),
-    icon: String(item.icon ?? fallback.icon),
-    iconColor: String(item.icon_color ?? item.iconColor ?? fallback.iconColor),
-    iconBg: String(item.icon_bg ?? item.iconBg ?? fallback.iconBg),
-    cost: Number(item.cost ?? fallback.cost),
-    desc: String(item.desc ?? item.description ?? fallback.desc),
+    id,
+    name: String(item.name ?? fallback?.name ?? id),
+    icon: String(item.icon ?? fallback?.icon ?? "gift"),
+    iconColor: String(item.icon_color ?? item.iconColor ?? fallback?.iconColor ?? "#241a3d"),
+    iconBg: String(item.icon_bg ?? item.iconBg ?? fallback?.iconBg ?? "#fff8e8"),
+    cost: Number(item.cost ?? fallback?.cost ?? 0),
+    desc: String(item.desc ?? item.description ?? fallback?.desc ?? "云端商品"),
     available: item.available !== false,
   };
 }

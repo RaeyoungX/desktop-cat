@@ -80,7 +80,9 @@ export function SubscriptionPanel({
       </section>
 
       <section className="plan-grid">
-        {plans.map((plan) => {
+        {plans.length === 0 ? (
+          <div className="empty">套餐接口暂不可用，请稍后刷新云端状态。</div>
+        ) : plans.map((plan) => {
           const active = subscription?.plan === plan.id;
           const amount = price(plan, billingCycle);
           return (

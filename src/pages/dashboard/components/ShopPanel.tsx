@@ -31,7 +31,9 @@ export function ShopPanel({ cloudUser, equipped, ownedItems, points, shopItems, 
       </section>
 
       <section className="shop-list">
-        {shopItems.map((item) => {
+        {shopItems.length === 0 ? (
+          <div className="empty">商店接口暂不可用，请稍后刷新云端状态。</div>
+        ) : shopItems.map((item) => {
           const Icon = ICONS[item.icon as keyof typeof ICONS] ?? Gift;
           const owned = cloudUser ? ownedItems.includes(item.id) : false;
           const isEquipped = equipped.includes(item.id);
