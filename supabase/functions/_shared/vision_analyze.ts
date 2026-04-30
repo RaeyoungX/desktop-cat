@@ -92,7 +92,7 @@ Analyze the screenshot and decide whether the visible screen content is meaningf
 Return "focused" when:
 - There is clear visual evidence that the current screen supports the task: code/editor/terminal for development tasks, docs/specs/reference pages for the same topic, design tools/assets for design tasks, writing documents for writing tasks, or task-specific research.
 - Email, chat, meetings, search results, and browser pages are focused ONLY if their visible content is clearly connected to the task name.
-- Reference material is focused ONLY when it appears plausibly related to the task. Generic browsing is not reference material.
+- Reference material is focused ONLY when visible text, formulas, UI labels, filenames, URLs, or page content show a direct task connection. Generic browsing is not reference material.
 
 Return "distracted" when:
 - The screen is clearly unrelated to the task and shows entertainment, short videos, games, shopping, social feeds, unrelated chat, memes, news feeds, personal browsing, or leisure content.
@@ -101,13 +101,15 @@ Return "distracted" when:
 
 Return "uncertain" only when:
 - The screenshot is locked, black, blurred, hidden, too cropped, loading, empty, or impossible to judge.
-- The screen may be reference material but the visible text is insufficient to prove either focused or distracted.
+- The screen is partially visible and there is not enough information to identify the app/page content at all.
 - The user appears to be briefly switching windows and no unrelated content is clearly visible.
 
 Decision policy:
 - Do not mark content focused just because it is a work app. Require task relevance.
-- When unrelated content is obvious, choose distracted even if there is some ambiguity.
-- When evidence is genuinely insufficient, choose uncertain. The client treats uncertain as focused.
+- Do not infer hidden intent. Do not reason that the user "could", "might", or "may" be doing research unless the screenshot visibly supports it.
+- If the only focused evidence is speculative, choose distracted, not focused.
+- When unrelated or generic content is visible, choose distracted even if the user might theoretically use it for work.
+- When visual evidence is genuinely unreadable or absent, choose uncertain. The client treats uncertain as focused.
 
 Respond ONLY as valid JSON:
 {
