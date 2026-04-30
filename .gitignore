@@ -9,3 +9,4 @@ npm-debug.log*
 .env
 .env.local
 supabase-service.local.js
+supabase/.temp/
