@@ -1,8 +1,3 @@
-import type {
-  BillingCycle,
-  PaymentMethod,
-  PlanId,
-} from "../../src/shared/cloud";
 import type { FocusSession } from "../../src/shared/types";
 import { getApiBaseUrl, getAuthSession, setAuthSession, type AuthSession } from "./store";
 
@@ -21,6 +16,35 @@ type RequestOptions = {
   auth?: boolean;
   body?: unknown;
 };
+
+function shouldLogCloudApi(): boolean {
+  return Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.DESKTOP_CAT_LOG_API === "true";
+}
+
+function logCloudApi(message: string, details?: Record<string, unknown>): void {
+  if (!shouldLogCloudApi()) return;
+  if (details) {
+    console.log(`[desktop-cat][api] ${message}`, details);
+    return;
+  }
+  console.log(`[desktop-cat][api] ${message}`);
+}
+
+function parseCloudPayload<T>(text: string, response: Response): CloudApiResult<T> {
+  if (!text) return { ok: response.ok } as CloudApiResult<T>;
+
+  try {
+    return JSON.parse(text) as CloudApiResult<T>;
+  } catch {
+    return {
+      ok: false,
+      error: {
+        code: `HTTP_${response.status}`,
+        message: text.slice(0, 180) || "云端接口返回了非 JSON 响应",
+      },
+    };
+  }
+}
 
 function isExpiring(session: AuthSession | null): boolean {
   if (!session?.expires_at) return false;
@@ -42,6 +66,8 @@ function normalizeSession(data: Record<string, unknown>, existing: AuthSession |
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<CloudApiResult<T>> {
+  const method = options.method ?? "GET";
+  const startedAt = Date.now();
   let session = getAuthSession();
   if (options.auth && isExpiring(session) && session?.refresh_token) {
     const refreshed = await request<Record<string, unknown>>("/auth/refresh", {
@@ -55,12 +81,20 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<C
   }
 
   if (options.auth && !session?.access_token) {
+    logCloudApi(`xx ${method} ${path}`, {
+      auth: "missing",
+      code: "UNAUTHORIZED",
+      elapsedMs: Date.now() - startedAt,
+    });
     return { ok: false, error: { code: "UNAUTHORIZED", message: "请先登录" } };
   }
 
   try {
+    logCloudApi(`-> ${method} ${path}`, {
+      auth: options.auth ? "yes" : "no",
+    });
     const response = await fetch(`${getApiBaseUrl()}${path}`, {
-      method: options.method ?? "GET",
+      method,
       headers: {
         "Content-Type": "application/json",
         ...(options.auth ? { Authorization: `Bearer ${session?.access_token}` } : {}),
@@ -68,10 +102,22 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<C
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
     });
     const text = await response.text();
-    const payload = text ? JSON.parse(text) as CloudApiResult<T> : { ok: response.ok } as CloudApiResult<T>;
+    const payload = parseCloudPayload<T>(text, response);
+    logCloudApi(`<- ${method} ${path}`, {
+      status: response.status,
+      ok: payload.ok,
+      code: payload.error?.code,
+      message: payload.error?.message,
+      elapsedMs: Date.now() - startedAt,
+    });
     if (response.status === 401 && options.auth) setAuthSession(null);
     return payload;
   } catch (error) {
+    logCloudApi(`!! ${method} ${path}`, {
+      code: "NETWORK_ERROR",
+      message: error instanceof Error ? error.message : "网络请求失败",
+      elapsedMs: Date.now() - startedAt,
+    });
     return {
       ok: false,
       error: {
@@ -138,9 +184,6 @@ export const cloudClient = {
   getLeaderboard: (limit = 10) => request(`/stats/leaderboard?limit=${encodeURIComponent(String(limit))}`, { auth: true }),
   getPlans: () => request("/plans"),
   getSubscription: () => request("/subscription", { auth: true }),
-  createPayment: (payload: { plan_id: PlanId; billing: BillingCycle; payment_method: PaymentMethod }) =>
-    request("/payment/create", { method: "POST", auth: true, body: payload }),
-  getOrder: (orderId: string) => request(`/payment/order/${encodeURIComponent(orderId)}`, { auth: true }),
   getShopItems: () => request("/shop/items"),
   getInventory: () => request("/shop/inventory", { auth: true }),
   buyItem: (itemId: string) => request("/shop/buy", { method: "POST", auth: true, body: { item_id: itemId } }),

@@ -1,6 +1,19 @@
 import type { VisionResult, FocusStatus } from "../../src/shared/types";
 import { getApiBaseUrl } from "./store";
 
+function shouldLogVision(): boolean {
+  return Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.DESKTOP_CAT_LOG_API === "true";
+}
+
+function logVision(message: string, details?: Record<string, unknown>): void {
+  if (!shouldLogVision()) return;
+  if (details) {
+    console.log(`[desktop-cat][vision] ${message}`, details);
+    return;
+  }
+  console.log(`[desktop-cat][vision] ${message}`);
+}
+
 function normalizeStatus(value: unknown): FocusStatus {
   return value === "focused" || value === "distracted" || value === "uncertain"
     ? value
@@ -38,6 +51,11 @@ export type AnalyzeScreenInput = {
 
 export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionResult> {
   if (!input.endpoint || !input.accessToken) {
+    logVision("xx skip analyze", {
+      checkId: input.checkId,
+      hasEndpoint: Boolean(input.endpoint),
+      hasAccessToken: Boolean(input.accessToken),
+    });
     return {
       status: "uncertain",
       confidence: 0,
@@ -46,6 +64,14 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
       checkId: input.checkId,
     };
   }
+
+  const startedAt = Date.now();
+  logVision("-> POST /vision/analyze", {
+    checkId: input.checkId,
+    endpoint: input.endpoint,
+    taskLength: input.taskName.length,
+    imageBytesApprox: Math.round((input.screenshotBase64.length * 3) / 4),
+  });
 
   const response = await fetch(input.endpoint, {
     method: "POST",
@@ -66,6 +92,12 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
   });
 
   if (!response.ok) {
+    logVision("<- POST /vision/analyze", {
+      checkId: input.checkId,
+      status: response.status,
+      ok: false,
+      elapsedMs: Date.now() - startedAt,
+    });
     return {
       status: "uncertain",
       confidence: 0,
@@ -79,6 +111,13 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
   if (payload && typeof payload === "object" && "ok" in payload) {
     const wrapped = payload as { ok?: boolean; data?: unknown; error?: { code?: string; message?: string } };
     if (!wrapped.ok) {
+      logVision("<- POST /vision/analyze", {
+        checkId: input.checkId,
+        status: response.status,
+        ok: false,
+        code: wrapped.error?.code,
+        elapsedMs: Date.now() - startedAt,
+      });
       return {
         status: "uncertain",
         confidence: 0,
@@ -87,9 +126,27 @@ export async function analyzeScreen(input: AnalyzeScreenInput): Promise<VisionRe
         checkId: input.checkId,
       };
     }
-    return normalizeVisionPayload(wrapped.data);
+    const result = normalizeVisionPayload(wrapped.data);
+    logVision("<- POST /vision/analyze", {
+      checkId: input.checkId,
+      status: response.status,
+      ok: true,
+      result: result.status,
+      confidence: result.confidence,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
   }
-  return normalizeVisionPayload(payload);
+  const result = normalizeVisionPayload(payload);
+  logVision("<- POST /vision/analyze", {
+    checkId: input.checkId,
+    status: response.status,
+    ok: true,
+    result: result.status,
+    confidence: result.confidence,
+    elapsedMs: Date.now() - startedAt,
+  });
+  return result;
 }
 
 export function defaultVisionAnalyzeUrl(): string {

@@ -361,8 +361,6 @@ function registerIpc(): void {
   ipcMain.handle("cloud:leaderboard", (_, limit: number) => cloudClient.getLeaderboard(limit));
   ipcMain.handle("billing:plans", () => cloudClient.getPlans());
   ipcMain.handle("billing:subscription", () => cloudClient.getSubscription());
-  ipcMain.handle("billing:create-payment", (_, payload) => cloudClient.createPayment(payload));
-  ipcMain.handle("billing:order", (_, orderId: string) => cloudClient.getOrder(orderId));
   ipcMain.handle("shop:items", () => cloudClient.getShopItems());
   ipcMain.handle("shop:inventory", () => cloudClient.getInventory());
   ipcMain.handle("shop:buy", (_, itemId: string) => cloudClient.buyItem(itemId));

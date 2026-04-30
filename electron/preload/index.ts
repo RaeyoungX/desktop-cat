@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { ActiveSession, FocusSession, TimelineEntry, TodayTask } from "../../src/shared/types";
-import type { BillingCycle, PaymentMethod, PlanId } from "../../src/shared/cloud";
 
 type Listener<T> = (payload: T) => void;
 
@@ -58,9 +57,6 @@ const api = {
   billing: {
     getPlans: (): Promise<unknown> => ipcRenderer.invoke("billing:plans"),
     getSubscription: (): Promise<unknown> => ipcRenderer.invoke("billing:subscription"),
-    createPayment: (payload: { plan_id: PlanId; billing: BillingCycle; payment_method: PaymentMethod }): Promise<unknown> =>
-      ipcRenderer.invoke("billing:create-payment", payload),
-    getOrder: (orderId: string): Promise<unknown> => ipcRenderer.invoke("billing:order", orderId),
   },
   shopCloud: {
     getItems: (): Promise<unknown> => ipcRenderer.invoke("shop:items"),

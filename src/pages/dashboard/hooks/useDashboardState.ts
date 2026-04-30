@@ -23,6 +23,7 @@ import {
   type ShopItem,
 } from "../../../shared/cloud";
 import { buildDailyStats, buildWeekStats, sessionMinutes } from "../../../shared/stats";
+import { rendererCloudApi } from "../../../shared/cloud-api";
 import { createTask } from "../../../shared/tasks";
 import type { ActiveSession, FocusSession, TimelineEntry, TodayTask } from "../../../shared/types";
 import type { DashboardTab } from "../constants";
@@ -188,8 +189,7 @@ export function useDashboardState() {
 
   useInterval(() => {
     if (!paymentOrder || paymentOrder.status !== "pending") return;
-    void window.desktopCat.billing.getOrder(paymentOrder.orderId).then((payload) => {
-      const result = unwrap<unknown>(payload);
+    void rendererCloudApi.getPaymentOrder(paymentOrder.orderId).then((result) => {
       if (!result.ok) return;
       const order = normalizeOrder(result.data);
       if (!order) return;
@@ -350,11 +350,11 @@ export function useDashboardState() {
 
   async function createPayment(planId: PlanId) {
     setCloudBusy(true);
-    const result = unwrap<unknown>(await window.desktopCat.billing.createPayment({
+    const result = await rendererCloudApi.createPayment({
       plan_id: planId,
       billing: billingCycle,
       payment_method: paymentMethod,
-    }));
+    });
     setCloudBusy(false);
     if (!result.ok) {
       setCloudStatus(result.error?.message ?? "创建订单失败");

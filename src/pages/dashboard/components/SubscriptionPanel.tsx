@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import * as QRCode from "qrcode";
 import { Check, CreditCard, QrCode } from "lucide-react";
 import type { BillingCycle, CloudPlan, CloudSubscription, PaymentMethod, PaymentOrder, PlanId } from "../../../shared/cloud";
 
@@ -32,6 +34,34 @@ export function SubscriptionPanel({
   onCreatePayment,
   onPaymentMethodChange,
 }: SubscriptionPanelProps) {
+  const [generatedQrUrl, setGeneratedQrUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!paymentOrder?.payUrl || paymentOrder.qrCodeUrl) {
+      setGeneratedQrUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+    QRCode.toDataURL(paymentOrder.payUrl, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 560,
+    })
+      .then((url) => {
+        if (!cancelled) setGeneratedQrUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setGeneratedQrUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentOrder?.payUrl, paymentOrder?.qrCodeUrl]);
+
+  const qrImageUrl = paymentOrder?.qrCodeUrl ?? generatedQrUrl;
+
   return (
     <main className="panel-stack">
       <section className="subscription-hero">
@@ -79,8 +109,8 @@ export function SubscriptionPanel({
             <img src="/assets/cat-peek.png" alt="" />
             <strong>{paymentOrder.status === "paid" ? "支付完成" : "等待支付"}</strong>
             <span>{paymentOrder.plan.toUpperCase()} · ¥{paymentOrder.amount} · {paymentOrder.status}</span>
-            {paymentOrder.qrCodeUrl ? (
-              <div className="qr-box"><img src={paymentOrder.qrCodeUrl} alt="payment qr" /></div>
+            {qrImageUrl ? (
+              <div className="qr-box"><img src={qrImageUrl} alt="payment qr" /></div>
             ) : (
               <div className="qr-box"><QrCode size={44} /></div>
             )}

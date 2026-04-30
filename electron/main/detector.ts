@@ -57,6 +57,19 @@ export type DetectorOptions = DetectorCallbacks & {
 
 type ScreenshotCapture = (options: { format: "jpg"; screen?: number }) => Promise<Buffer>;
 
+function shouldLogDetector(): boolean {
+  return Boolean(process.env.VITE_DEV_SERVER_URL) || process.env.DESKTOP_CAT_LOG_API === "true";
+}
+
+function logDetector(message: string, details?: Record<string, unknown>): void {
+  if (!shouldLogDetector()) return;
+  if (details) {
+    console.log(`[desktop-cat][detector] ${message}`, details);
+    return;
+  }
+  console.log(`[desktop-cat][detector] ${message}`);
+}
+
 export async function capturePrimaryScreenshot(capture: ScreenshotCapture = screenshot as ScreenshotCapture): Promise<Buffer> {
   try {
     return await capture({ format: "jpg", screen: 0 });
@@ -90,11 +103,24 @@ export class VisionDetector {
       alerting: false,
       sessionDistractCount: 0,
     };
+    logDetector("started", {
+      sessionId,
+      taskLength: taskName.length,
+      firstCheckInMs: DETECTION_INTERVAL_MS,
+      endpoint: this.options.getEndpoint() ?? "",
+      hasAccessToken: Boolean(this.options.getAccessToken()),
+    });
     this.timer = setInterval(() => void this.runCheck(), DETECTION_INTERVAL_MS);
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.currentTask || this.sessionId) {
+      logDetector("stopped", {
+        sessionId: this.sessionId,
+        distractCount: this.state.sessionDistractCount,
+      });
+    }
     this.timer = null;
     this.currentTask = "";
     this.sessionId = "";
@@ -109,19 +135,28 @@ export class VisionDetector {
   async runCheck(): Promise<void> {
     if (!this.currentTask || !this.sessionId) return;
 
+    const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let imageBuffer: Buffer | null = null;
     let screenshotBase64 = "";
     try {
+      logDetector("capture start", { checkId, sessionId: this.sessionId });
       imageBuffer = await capturePrimaryScreenshot();
+      logDetector("capture ok", {
+        checkId,
+        bytes: imageBuffer.byteLength,
+      });
       screenshotBase64 = imageBuffer.toString("base64");
     } catch (error) {
+      logDetector("capture failed", {
+        checkId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
       this.options.onStatus?.(`截图失败：${error instanceof Error ? error.message : "unknown"}`);
       return;
     } finally {
       imageBuffer = null;
     }
 
-    const checkId = `check_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let result: VisionResult;
     try {
       result = await analyzeScreen({
@@ -134,11 +169,21 @@ export class VisionDetector {
         checkId,
       });
     } catch (error) {
+      logDetector("analyze failed", {
+        checkId,
+        message: error instanceof Error ? error.message : "unknown",
+      });
       this.options.onStatus?.(`AI 检测失败：${error instanceof Error ? error.message : "unknown"}`);
       return;
     } finally {
       screenshotBase64 = "";
     }
+    logDetector("analyze ok", {
+      checkId,
+      status: result.status,
+      confidence: result.confidence,
+      activity: result.activity,
+    });
 
     this.options.onActivity?.({
       time: Date.now(),
