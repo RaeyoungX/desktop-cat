@@ -77,22 +77,31 @@ function clampConfidence(value: unknown): number {
 }
 
 function buildPrompt(taskName: string): string {
-  return `You are a conservative focus relevance judge for a desktop productivity app.
+  return `You are a focus relevance judge for a desktop productivity app.
 
 Current focus task: "${taskName}"
 
-Analyze the screenshot and decide whether the visible screen content is related to the task.
+Analyze the screenshot and decide whether the visible screen content is meaningfully related to the current task.
 
 Return "focused" when:
-- The screen shows code editors, terminal, docs, writing tools, design tools, task-related websites, email/reference material, notes, meetings, or plausible research for the task.
-- The screen is locked, black, blurred, partially hidden, ambiguous, idle, or impossible to judge.
-- The user appears to be checking reference material or switching windows briefly.
+- There is clear visual evidence that the current screen supports the task: code/editor/terminal for development tasks, docs/specs/reference pages for the same topic, design tools/assets for design tasks, writing documents for writing tasks, or task-specific research.
+- Email, chat, meetings, search results, and browser pages are focused ONLY if their visible content is clearly connected to the task name.
+- Reference material is focused ONLY when it appears plausibly related to the task. Generic browsing is not reference material.
 
-Return "distracted" only when the content is clearly unrelated entertainment or personal browsing, such as short videos, games, shopping, social feeds, unrelated chat, or obvious leisure content.
+Return "distracted" when:
+- The screen is clearly unrelated to the task and shows entertainment, short videos, games, shopping, social feeds, unrelated chat, memes, news feeds, personal browsing, or leisure content.
+- The visible app/page is work-like but unrelated to the current task, such as an unrelated email/chat thread, unrelated documentation, unrelated dashboard, or unrelated website.
+- The task is specific but the screen shows a generic home page, feed, inbox, or search page with no visible task connection.
 
-Return "uncertain" when you cannot confidently decide. The client treats uncertain as focused.
+Return "uncertain" only when:
+- The screenshot is locked, black, blurred, hidden, too cropped, loading, empty, or impossible to judge.
+- The screen may be reference material but the visible text is insufficient to prove either focused or distracted.
+- The user appears to be briefly switching windows and no unrelated content is clearly visible.
 
-Be intentionally conservative. False reminders are worse than missed distractions.
+Decision policy:
+- Do not mark content focused just because it is a work app. Require task relevance.
+- When unrelated content is obvious, choose distracted even if there is some ambiguity.
+- When evidence is genuinely insufficient, choose uncertain. The client treats uncertain as focused.
 
 Respond ONLY as valid JSON:
 {

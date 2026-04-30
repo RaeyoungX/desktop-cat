@@ -122,4 +122,4 @@ supabase functions deploy auth user quota sessions stats plans subscription bill
 
 - 截图只在内存中用于当次 Vision 调用，不写磁盘、不上传 Storage、不入库。
 - Vision 日志只记录 requestId、用户短 hash、模型、状态、耗时和平台，不记录 base64 或完整任务文本。
-- `uncertain`、锁屏、黑屏、参考资料、无法判断都按 focused 处理，避免误报。
+- `uncertain`、锁屏、黑屏、无法判断都按 focused 处理；参考资料必须和任务可见相关，否则不再自动放行。
