@@ -35,15 +35,17 @@ export function SubscriptionPanel({
   onPaymentMethodChange,
 }: SubscriptionPanelProps) {
   const [generatedQrUrl, setGeneratedQrUrl] = useState<string | null>(null);
+  const qrPayload = paymentOrder?.qrCode || paymentOrder?.payUrl || "";
+  const shouldGenerateQr = Boolean(paymentOrder?.qrCode || (!paymentOrder?.qrCodeUrl && paymentOrder?.payUrl));
 
   useEffect(() => {
-    if (!paymentOrder?.payUrl || paymentOrder.qrCodeUrl) {
+    if (!qrPayload || !shouldGenerateQr) {
       setGeneratedQrUrl(null);
       return;
     }
 
     let cancelled = false;
-    QRCode.toDataURL(paymentOrder.payUrl, {
+    QRCode.toDataURL(qrPayload, {
       errorCorrectionLevel: "M",
       margin: 1,
       width: 560,
@@ -58,9 +60,9 @@ export function SubscriptionPanel({
     return () => {
       cancelled = true;
     };
-  }, [paymentOrder?.payUrl, paymentOrder?.qrCodeUrl]);
+  }, [qrPayload, shouldGenerateQr]);
 
-  const qrImageUrl = paymentOrder?.qrCodeUrl ?? generatedQrUrl;
+  const qrImageUrl = generatedQrUrl ?? paymentOrder?.qrCodeUrl ?? null;
 
   return (
     <main className="panel-stack">

@@ -13,7 +13,7 @@ export type EasyPayCreateResponse = {
 export type NormalizedPaymentLink = {
   tradeNo: string;
   payUrl: string;
-  qrCodeUrl: string;
+  qrCode?: string;
 };
 
 export function mapPaymentMethod(method: string): "alipay" | "wxpay" {
@@ -36,12 +36,12 @@ export function normalizeEasyPayCreateResponse(response: EasyPayCreateResponse, 
     throw new Error(response.msg || "EasyPay create payment failed");
   }
   const tradeNo = response.trade_no || "";
-  const payUrl = (preferMobile && response.payurl2) || response.payurl || response.qrcode || response.img || "";
-  const qrCodeUrl = response.qrcode || response.img || response.payurl || response.payurl2 || "";
+  const payUrl = (preferMobile && response.payurl2) || response.payurl || response.payurl2 || response.img || "";
+  const qrCode = response.qrcode || undefined;
   if (!tradeNo || !payUrl) {
     throw new Error("EasyPay response did not include a usable payment link");
   }
-  return { tradeNo, payUrl, qrCodeUrl };
+  return { tradeNo, payUrl, qrCode };
 }
 
 export function normalizeEasyPayOrderStatus(value: unknown): "paid" | "pending" {

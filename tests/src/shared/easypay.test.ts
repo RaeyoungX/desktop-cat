@@ -28,11 +28,11 @@ describe("EasyPay helpers", () => {
       code: 1,
       trade_no: "EP-1",
       payurl: "https://pay.example/pay",
-      qrcode: "https://pay.example/qr.png",
+      qrcode: "alipays://platformapi/startapp?saId=10000007&qrcode=payload",
     })).toEqual({
       tradeNo: "EP-1",
       payUrl: "https://pay.example/pay",
-      qrCodeUrl: "https://pay.example/qr.png",
+      qrCode: "alipays://platformapi/startapp?saId=10000007&qrcode=payload",
     });
   });
 

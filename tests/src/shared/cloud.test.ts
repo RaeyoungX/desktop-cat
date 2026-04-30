@@ -68,10 +68,20 @@ describe("cloud plan helpers", () => {
       userId: "abc",
       totalMins: 30,
     });
-    expect(normalizeOrder({ order_id: "CAT1", status: "paid", plan: "pro", amount: 15, payment_method: "wechat" })).toMatchObject({
+    expect(normalizeOrder({
+      order_id: "CAT1",
+      status: "paid",
+      plan: "pro",
+      amount: 15,
+      payment_method: "wechat",
+      qr_code: "alipays://platformapi/startapp?payload",
+      qr_code_url: "https://legacy.example/qr.png",
+    })).toMatchObject({
       orderId: "CAT1",
       status: "paid",
       paymentMethod: "wechat",
+      qrCode: "alipays://platformapi/startapp?payload",
+      qrCodeUrl: "https://legacy.example/qr.png",
     });
     expect(normalizeCloudUser({
       user_id: "user-1",

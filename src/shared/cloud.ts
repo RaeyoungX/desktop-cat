@@ -83,6 +83,7 @@ export type PaymentOrder = {
   currency: string;
   paymentMethod: PaymentMethod;
   payUrl?: string;
+  qrCode?: string;
   qrCodeUrl?: string;
   paidAt?: string | null;
   expiresAt?: string;
@@ -252,6 +253,7 @@ export function normalizeOrder(raw: unknown): PaymentOrder | null {
     currency: String(item.currency ?? "CNY"),
     paymentMethod: item.payment_method === "wechat" || item.paymentMethod === "wechat" ? "wechat" : "alipay",
     payUrl: typeof item.pay_url === "string" ? item.pay_url : typeof item.payUrl === "string" ? item.payUrl : undefined,
+    qrCode: typeof item.qr_code === "string" ? item.qr_code : typeof item.qrCode === "string" ? item.qrCode : undefined,
     qrCodeUrl: typeof item.qr_code_url === "string" ? item.qr_code_url : typeof item.qrCodeUrl === "string" ? item.qrCodeUrl : undefined,
     paidAt: typeof item.paid_at === "string" ? item.paid_at : item.paidAt as string | null ?? null,
     expiresAt: typeof item.expires_at === "string" ? item.expires_at : typeof item.expiresAt === "string" ? item.expiresAt : undefined,

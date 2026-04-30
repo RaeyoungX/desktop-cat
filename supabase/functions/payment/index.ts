@@ -57,7 +57,7 @@ async function createPayment(req: Request): Promise<Response> {
     await auth.serviceClient.from("orders").update({
       trade_no: payment.tradeNo || null,
       pay_url: payment.payUrl,
-      qr_code_url: payment.qrCodeUrl,
+      qr_code_url: null,
     }).eq("id", id);
     return ok({
       order_id: id,
@@ -65,7 +65,8 @@ async function createPayment(req: Request): Promise<Response> {
       currency: "CNY",
       payment_method: method,
       pay_url: payment.payUrl,
-      qr_code_url: payment.qrCodeUrl,
+      qr_code: payment.qrCode,
+      qr_code_url: null,
       expires_at: expiresAt,
     });
   } catch (error) {

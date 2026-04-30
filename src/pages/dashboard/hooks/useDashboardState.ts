@@ -193,7 +193,11 @@ export function useDashboardState() {
       if (!result.ok) return;
       const order = normalizeOrder(result.data);
       if (!order) return;
-      setPaymentOrder(order);
+      setPaymentOrder((current) => ({
+        ...order,
+        qrCode: order.qrCode ?? current?.qrCode,
+        qrCodeUrl: order.qrCodeUrl ?? current?.qrCodeUrl,
+      }));
       if (order.status === "paid") {
         setCloudStatus("支付完成，套餐已激活");
         void refreshCloud();
