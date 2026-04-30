@@ -14,6 +14,7 @@ import {
   saveTodayTasks,
   setEquippedItems,
 } from "./store";
+import { createTrayNativeImage } from "./tray-icon";
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 const rootDir = isDev ? path.join(__dirname, "../..") : path.join(__dirname, "../../..");
@@ -132,7 +133,7 @@ function createDashboard(): void {
 }
 
 function createTray(): void {
-  tray = new Tray(publicAsset("assets", "cat-loaf.png"));
+  tray = new Tray(createTrayNativeImage(publicAsset("assets", "cat-loaf.png")));
   tray.setToolTip("Desktop Cat");
   updateTrayMenu();
   setInterval(updateTrayMenu, 30_000);
