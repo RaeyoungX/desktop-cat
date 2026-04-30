@@ -7,6 +7,7 @@ import type { FocusSession } from "../../../shared/types";
 type ProfilePanelProps = {
   authEmail: string;
   authPassword: string;
+  authPasswordConfirm: string;
   cloudBusy: boolean;
   cloudStatus: string;
   cloudUser: CloudUser | null;
@@ -15,6 +16,7 @@ type ProfilePanelProps = {
   sessions: FocusSession[];
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  onPasswordConfirmChange: (value: string) => void;
   onRefreshCloud: () => void;
   onSignIn: (mode: "signin" | "signup") => void;
   onSignOut: () => void;
@@ -23,6 +25,7 @@ type ProfilePanelProps = {
 export function ProfilePanel({
   authEmail,
   authPassword,
+  authPasswordConfirm,
   cloudBusy,
   cloudStatus,
   cloudUser,
@@ -31,6 +34,7 @@ export function ProfilePanel({
   sessions,
   onEmailChange,
   onPasswordChange,
+  onPasswordConfirmChange,
   onRefreshCloud,
   onSignIn,
   onSignOut,
@@ -61,6 +65,14 @@ export function ProfilePanel({
           </div>
           <input value={authEmail} onChange={(event) => onEmailChange(event.target.value)} placeholder="Email" />
           <input value={authPassword} onChange={(event) => onPasswordChange(event.target.value)} placeholder="Password" type="password" />
+          {authMode === "signup" ? (
+            <input
+              value={authPasswordConfirm}
+              onChange={(event) => onPasswordConfirmChange(event.target.value)}
+              placeholder="Confirm password"
+              type="password"
+            />
+          ) : null}
           <button className="auth-submit" disabled={cloudBusy} onClick={() => onSignIn(authMode)}>
             {cloudBusy ? "处理中..." : authMode === "signin" ? "登录" : "创建账号"}
           </button>

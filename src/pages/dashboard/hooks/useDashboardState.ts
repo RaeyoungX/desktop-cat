@@ -68,6 +68,7 @@ export function useDashboardState() {
   const [equipped, setEquipped] = useState<string[]>([]);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authPasswordConfirm, setAuthPasswordConfirm] = useState("");
   const [cloudUser, setCloudUser] = useState<CloudUser | null>(null);
   const [cloudStatus, setCloudStatus] = useState("离线可用");
   const [cloudBusy, setCloudBusy] = useState(false);
@@ -316,6 +317,11 @@ export function useDashboardState() {
   }
 
   async function signIn(mode: "signin" | "signup") {
+    if (mode === "signup" && authPassword !== authPasswordConfirm) {
+      setCloudStatus("两次输入的密码不一致。");
+      return;
+    }
+
     setCloudBusy(true);
     const result = unwrap<unknown>(
       mode === "signin"
@@ -328,6 +334,7 @@ export function useDashboardState() {
       return;
     }
     setAuthPassword("");
+    setAuthPasswordConfirm("");
     setCloudStatus(mode === "signin" ? "登录成功" : "注册成功");
     await refreshCloud();
   }
@@ -373,6 +380,7 @@ export function useDashboardState() {
     activeTab,
     authEmail,
     authPassword,
+    authPasswordConfirm,
     billingCycle,
     cloudBusy,
     cloudStatus,
@@ -414,6 +422,7 @@ export function useDashboardState() {
     setActiveTab,
     setAuthEmail,
     setAuthPassword,
+    setAuthPasswordConfirm,
     setBillingCycle,
     setCustomDuration,
     setDuration,

@@ -101,6 +101,7 @@ export function DashboardPage() {
             <ProfilePanel
               authEmail={dashboard.authEmail}
               authPassword={dashboard.authPassword}
+              authPasswordConfirm={dashboard.authPasswordConfirm}
               cloudBusy={dashboard.cloudBusy}
               cloudStatus={dashboard.cloudStatus}
               cloudUser={dashboard.cloudUser}
@@ -109,6 +110,7 @@ export function DashboardPage() {
               sessions={dashboard.sessions}
               onEmailChange={dashboard.setAuthEmail}
               onPasswordChange={dashboard.setAuthPassword}
+              onPasswordConfirmChange={dashboard.setAuthPasswordConfirm}
               onRefreshCloud={() => void dashboard.refreshCloud()}
               onSignIn={(mode) => void dashboard.signIn(mode)}
               onSignOut={() => void dashboard.signOut()}
