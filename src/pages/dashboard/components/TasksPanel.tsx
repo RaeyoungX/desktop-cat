@@ -7,6 +7,7 @@ type TasksPanelProps = {
   duration: number;
   focusName: string;
   newTaskText: string;
+  requiresLoginToFocus: boolean;
   selectedTask: TodayTask | null;
   selectedTaskId: string | null;
   tasks: TodayTask[];
@@ -27,6 +28,7 @@ export function TasksPanel({
   duration,
   focusName,
   newTaskText,
+  requiresLoginToFocus,
   selectedTask,
   selectedTaskId,
   tasks,
@@ -106,8 +108,11 @@ export function TasksPanel({
           />
         </div>
         <button className="primary-button" disabled={!focusName.trim()} onClick={onStartFocus}>
-          <Play size={17} /> 开始专注{selectedTask ? `：${selectedTask.text}` : ""}
+          <Play size={17} /> {requiresLoginToFocus ? "登录后开始 AI 专注" : `开始专注${selectedTask ? `：${selectedTask.text}` : ""}`}
         </button>
+        {requiresLoginToFocus ? (
+          <p className="focus-login-hint">AI 分心检测需要登录，免费套餐每月含 5 小时检测额度。</p>
+        ) : null}
       </section>
     </main>
   );

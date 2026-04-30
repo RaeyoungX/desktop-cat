@@ -36,6 +36,7 @@ export function DashboardPage() {
               duration={dashboard.duration}
               focusName={dashboard.focusName}
               newTaskText={dashboard.newTaskText}
+              requiresLoginToFocus={dashboard.requiresLoginToFocus}
               selectedTask={dashboard.selectedTask}
               selectedTaskId={dashboard.selectedTaskId}
               tasks={dashboard.tasks}

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Clock3, LogOut, RefreshCw, Star, UserRound, Zap } from "lucide-react";
 import type { CloudUser, QuotaSnapshot } from "../../../shared/cloud";
 import { sessionMinutes } from "../../../shared/stats";
@@ -34,6 +35,7 @@ export function ProfilePanel({
   onSignIn,
   onSignOut,
 }: ProfilePanelProps) {
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const localMinutes = sessions.reduce((sum, item) => sum + sessionMinutes(item), 0);
   const totalSessions = cloudUser?.stats.totalSessions ?? sessions.length;
   const totalMins = cloudUser?.stats.totalMins ?? localMinutes;
@@ -53,12 +55,22 @@ export function ProfilePanel({
 
       {!cloudUser ? (
         <section className="panel auth-panel">
+          <div className="auth-title">
+            <strong>{authMode === "signin" ? "登录账号" : "创建账号"}</strong>
+            <span>{authMode === "signin" ? "登录后启用 AI 检测和云同步" : "新账号默认包含 5 小时免费 AI 检测额度"}</span>
+          </div>
           <input value={authEmail} onChange={(event) => onEmailChange(event.target.value)} placeholder="Email" />
           <input value={authPassword} onChange={(event) => onPasswordChange(event.target.value)} placeholder="Password" type="password" />
-          <div className="button-row">
-            <button disabled={cloudBusy} onClick={() => onSignIn("signin")}>登录</button>
-            <button disabled={cloudBusy} onClick={() => onSignIn("signup")}>注册</button>
-          </div>
+          <button className="auth-submit" disabled={cloudBusy} onClick={() => onSignIn(authMode)}>
+            {cloudBusy ? "处理中..." : authMode === "signin" ? "登录" : "创建账号"}
+          </button>
+          <button
+            className="auth-switch"
+            onClick={() => setAuthMode(authMode === "signin" ? "signup" : "signin")}
+            type="button"
+          >
+            {authMode === "signin" ? "还没有账号？去注册" : "已有账号？去登录"}
+          </button>
         </section>
       ) : null}
 

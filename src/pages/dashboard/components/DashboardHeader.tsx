@@ -10,7 +10,6 @@ export function DashboardHeader({ activeSession }: DashboardHeaderProps) {
   return (
     <header className="titlebar">
       <div className="brand">
-        <span className="brand-mark">猫</span>
         <div>
           <strong>Desktop Cat</strong>
           <span>{activeSession ? "专注中" : "今天要做什么？"}</span>

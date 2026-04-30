@@ -65,7 +65,6 @@ button {
   gap: 10px;
 }
 
-.brand-mark,
 .avatar {
   width: 38px;
   height: 38px;
@@ -178,7 +177,7 @@ button {
 
 .shop-item button:disabled,
 .plan-card button:disabled,
-.button-row button:disabled {
+.auth-submit:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -327,6 +326,15 @@ button {
 
 .focus-input {
   margin-bottom: 10px;
+}
+
+.focus-login-hint {
+  margin: 10px 0 0;
+  color: #6a5b94;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .duration-grid {
@@ -720,14 +728,14 @@ button {
   font-weight: 800;
 }
 
-.button-row,
 .segmented {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
-.button-row button,
+.auth-submit,
+.auth-switch,
 .segmented button,
 .plan-card button,
 .payment-card button,
@@ -748,10 +756,32 @@ button {
 }
 
 .segmented button.active,
-.button-row button:first-child,
+.auth-submit,
 .plan-card button:not(:disabled),
 .payment-card button {
   background: #3ecf8e;
+}
+
+.auth-title strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.auth-title span {
+  display: block;
+  margin-top: 3px;
+  color: #6a5b94;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.auth-switch {
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #6d28d9;
 }
 
 .cloud-status {

@@ -30,6 +30,8 @@ let currentSession: ActiveSession | null = null;
 
 const CAT_W = 160;
 const CAT_H = 210;
+const DASHBOARD_W = 500;
+const DASHBOARD_H = 720;
 
 function publicAsset(...parts: string[]): string {
   return isDev
@@ -110,12 +112,12 @@ function createDashboard(): void {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   dashboardWindow = new BrowserWindow({
-    width: 460,
-    height: 620,
+    width: DASHBOARD_W,
+    height: DASHBOARD_H,
     minWidth: 390,
-    minHeight: 540,
-    x: Math.floor(width / 2 - 230),
-    y: Math.floor(height / 2 - 310),
+    minHeight: 640,
+    x: Math.floor(width / 2 - DASHBOARD_W / 2),
+    y: Math.floor(height / 2 - DASHBOARD_H / 2),
     resizable: true,
     frame: false,
     titleBarStyle: "hidden",
@@ -135,6 +137,19 @@ function createDashboard(): void {
     dashboardWindow.webContents.once("did-finish-load", () => {
       if (dashboardWindow && !dashboardWindow.isDestroyed()) {
         dashboardWindow.webContents.openDevTools({ mode: "detach" });
+      }
+    });
+  }
+  if (isDev) {
+    dashboardWindow.webContents.on("before-input-event", (event, input) => {
+      if (input.key === "F12" && input.type === "keyDown") {
+        event.preventDefault();
+        if (!dashboardWindow || dashboardWindow.isDestroyed()) return;
+        if (dashboardWindow.webContents.isDevToolsOpened()) {
+          dashboardWindow.webContents.closeDevTools();
+        } else {
+          dashboardWindow.webContents.openDevTools({ mode: "detach" });
+        }
       }
     });
   }

@@ -253,6 +253,11 @@ export function useDashboardState() {
   async function startFocus() {
     const name = focusName.trim();
     if (!name || activeSession) return;
+    if (!cloudUser) {
+      setCloudStatus("请先登录，登录后可使用每月 5 小时免费 AI 分心检测。");
+      setActiveTab("profile");
+      return;
+    }
     const nextSession = await window.desktopCat.sessions.start({ name, duration });
     setActiveSession(nextSession);
     setDetectorStatus("");
@@ -383,6 +388,7 @@ export function useDashboardState() {
     selectedTask,
     selectedTaskId,
     sessions,
+    requiresLoginToFocus: !cloudUser,
     shopItems,
     subscription,
     tasks,
