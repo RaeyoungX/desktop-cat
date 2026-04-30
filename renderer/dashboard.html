@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script src="../node_modules/lucide/dist/umd/lucide.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+      background: #F5E441;
+      height: 100vh;
+      display: flex; flex-direction: column;
+      -webkit-app-region: drag;
+      overflow: hidden;
+      border-radius: 12px;
+      color: #111;
+    }
+
+    input, button, .chip, .task-item, .tab, .shop-item { -webkit-app-region: no-drag; }
+
+    /* icon base */
+    .icon { display: inline-flex; align-items: center; justify-content: center; }
+    .icon svg { display: block; }
+
+    /* ── IDLE VIEW ── */
+    #viewIdle { display: flex; flex-direction: column; height: 100%; }
+
+    .topbar { display: flex; justify-content: flex-end; padding: 10px 14px 0; flex-shrink: 0; }
+
+    .close-btn {
+      width: 26px; height: 26px;
+      background: rgba(0,0,0,0.12); border: none; border-radius: 50%;
+      color: #555; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .close-btn:hover { background: rgba(0,0,0,0.22); color: #111; }
+
+    .hero {
+      display: flex; align-items: flex-end;
+      justify-content: space-between;
+      padding: 4px 24px 0; flex-shrink: 0;
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(0,0,0,0.1); border-radius: 20px;
+      padding: 3px 9px; font-size: 11px; font-weight: 600;
+      color: #444; margin-bottom: 6px;
+    }
+
+    .heading { font-size: 22px; font-weight: 800; line-height: 1.25; letter-spacing: -0.02em; }
+    .heading em { font-style: normal; color: #6d28d9; }
+    .subtext { font-size: 11px; color: #666; margin-top: 3px; }
+
+    .hero-img {
+      width: 90px; height: 90px;
+      object-fit: contain; mix-blend-mode: multiply;
+      flex-shrink: 0; margin-bottom: -2px;
+    }
+
+    /* ── WHITE CARD ── */
+    .card {
+      background: #fff; border-radius: 18px 18px 0 0;
+      flex: 1; padding: 16px 20px 20px;
+      display: flex; flex-direction: column;
+      gap: 10px; margin-top: 12px; overflow: hidden;
+    }
+
+    /* stats */
+    .stats-bar {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 12px; color: #999; font-weight: 500; flex-shrink: 0;
+    }
+    .stats-num { font-size: 13px; font-weight: 700; color: #6d28d9; }
+    .stats-dot { color: #ddd; margin: 0 2px; }
+    .stats-points {
+      margin-left: auto; display: flex; align-items: center; gap: 4px;
+      background: #fef9c3; border-radius: 12px; padding: 3px 9px;
+      font-size: 12px; font-weight: 700; color: #92400e;
+    }
+    .stats-points svg { color: #f59e0b; }
+
+    /* tab bar */
+    .tab-bar {
+      display: flex; gap: 3px;
+      background: #f5f5f7; border-radius: 10px; padding: 3px;
+      flex-shrink: 0;
+    }
+    .tab {
+      flex: 1; padding: 6px 8px; border-radius: 8px; border: none;
+      background: none; font-size: 12px; font-weight: 600;
+      color: #999; cursor: pointer; transition: all 0.15s;
+      font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .tab svg { flex-shrink: 0; }
+    .tab.active { background: #fff; color: #111; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+    /* ── TASKS TAB ── */
+    #tabTasks { display: flex; flex-direction: column; gap: 10px; flex: 1; overflow: hidden; }
+
+    .sec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .field-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: #bbb; }
+
+    .add-btn {
+      display: flex; align-items: center; gap: 3px;
+      background: none; border: none; font-size: 11px;
+      font-weight: 700; color: #6d28d9; cursor: pointer; padding: 0;
+      font-family: inherit;
+    }
+    .add-btn:hover { opacity: 0.7; }
+
+    .add-input-row { display: none; gap: 6px; margin-bottom: 2px; }
+    .add-input-row.visible { display: flex; }
+    .add-input-row input {
+      flex: 1; background: #f5f5f7; border: 2px solid #6d28d9;
+      border-radius: 8px; padding: 6px 10px; font-size: 12px;
+      color: #111; outline: none; font-family: inherit;
+    }
+    .add-input-row button {
+      background: #6d28d9; border: none; border-radius: 8px;
+      color: #fff; width: 30px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .task-list { display: flex; flex-direction: column; gap: 2px; max-height: 108px; overflow-y: auto; }
+    .task-list::-webkit-scrollbar { width: 3px; }
+    .task-list::-webkit-scrollbar-thumb { background: #eee; border-radius: 2px; }
+
+    .task-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: 8px;
+      cursor: pointer; transition: background 0.12s; user-select: none;
+    }
+    .task-item:hover { background: #f5f5f7; }
+    .task-item.selected { background: #f0eaff; }
+    .task-item.done { opacity: 0.4; }
+
+    .task-check {
+      width: 15px; height: 15px; border-radius: 50%;
+      border: 2px solid #ddd; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .task-item.selected .task-check { border-color: #6d28d9; }
+    .task-item.done .task-check { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+    .task-item.done .task-check svg { display: block; }
+
+    .task-text { flex: 1; font-size: 12px; color: #333; font-weight: 500; }
+    .task-item.done .task-text { text-decoration: line-through; }
+    .task-item.selected .task-text { color: #6d28d9; font-weight: 600; }
+
+    .task-del {
+      background: none; border: none; color: #ddd; cursor: pointer;
+      opacity: 0; padding: 2px; display: flex; align-items: center;
+      transition: opacity 0.15s, color 0.15s; border-radius: 4px;
+    }
+    .task-item:hover .task-del { opacity: 1; }
+    .task-del:hover { color: #f87171; }
+
+    .empty-hint { text-align: center; color: #ccc; font-size: 11px; padding: 10px 0; }
+
+    .focus-name-input {
+      width: 100%; background: #f5f5f7; border: 2px solid transparent;
+      border-radius: 10px; padding: 10px 13px; font-size: 13px; color: #111;
+      outline: none; transition: border-color 0.2s, background 0.2s; font-family: inherit;
+    }
+    .focus-name-input:focus { border-color: #6d28d9; background: #fff; }
+    .focus-name-input::placeholder { color: #ccc; }
+
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .chip {
+      padding: 5px 11px; border-radius: 20px; border: 2px solid #eee;
+      background: #f5f5f7; color: #666; font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s; font-family: inherit;
+    }
+    .chip:hover { border-color: #6d28d9; color: #6d28d9; }
+    .chip.active { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+
+    .custom-row { display: none; align-items: center; gap: 7px; margin-top: 6px; }
+    .custom-row.visible { display: flex; }
+    .custom-row input {
+      width: 64px; background: #f5f5f7; border: 2px solid #eee;
+      border-radius: 8px; padding: 5px 8px; color: #111; font-size: 12px;
+      outline: none; text-align: center; font-family: inherit; -webkit-app-region: no-drag;
+    }
+    .custom-row input:focus { border-color: #6d28d9; }
+    .custom-row span { font-size: 11px; color: #aaa; font-weight: 600; }
+
+    .spacer { flex: 1; min-height: 4px; }
+
+    .start-btn {
+      width: 100%; padding: 12px; background: #111; border: none;
+      border-radius: 12px; color: #fff; font-size: 14px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s, transform 0.1s; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .start-btn:hover:not(:disabled) { opacity: 0.8; }
+    .start-btn:active:not(:disabled) { transform: scale(0.98); }
+    .start-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    /* ── SHOP TAB ── */
+    #tabShop { display: none; flex-direction: column; gap: 10px; flex: 1; overflow: hidden; }
+
+    .shop-header {
+      display: flex; align-items: center; gap: 14px;
+      background: #fef9c3; border-radius: 12px; padding: 10px 14px;
+      flex-shrink: 0;
+    }
+    .shop-header-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: #fde68a; display: flex; align-items: center; justify-content: center;
+      color: #d97706; flex-shrink: 0;
+    }
+    .shop-points-num { font-size: 22px; font-weight: 800; color: #92400e; line-height: 1; }
+    .shop-points-label { font-size: 10px; color: #a16207; font-weight: 600; margin-top: 1px; }
+    .shop-points-hint { margin-left: auto; font-size: 10px; color: #a16207; text-align: right; line-height: 1.5; }
+
+    .shop-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; }
+    .shop-list::-webkit-scrollbar { width: 3px; }
+    .shop-list::-webkit-scrollbar-thumb { background: #eee; border-radius: 2px; }
+
+    .shop-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; background: #f5f5f7; border-radius: 10px;
+      border: 2px solid transparent; transition: border-color 0.15s;
+    }
+    .shop-item.owned { background: #f8f4ff; border-color: #e8e0ff; }
+    .shop-item.equipped { background: #f0eaff; border-color: #6d28d9; }
+
+    .item-icon-wrap {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    .item-info { flex: 1; min-width: 0; }
+    .item-name { font-size: 12px; font-weight: 700; color: #111; }
+    .item-desc { font-size: 10px; color: #999; margin-top: 1px; }
+
+    .item-cost { font-size: 11px; color: #bbb; font-weight: 600; flex-shrink: 0; white-space: nowrap; display: flex; align-items: center; gap: 3px; }
+    .item-cost.can-afford { color: #6d28d9; }
+    .item-cost svg { color: #f59e0b; }
+
+    .shop-btn {
+      padding: 5px 11px; border-radius: 8px; border: none;
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      font-family: inherit; white-space: nowrap; flex-shrink: 0;
+      transition: all 0.15s; display: flex; align-items: center; gap: 4px;
+    }
+    .shop-btn.buy-can { background: #6d28d9; color: #fff; }
+    .shop-btn.buy-cant { background: #eee; color: #ccc; cursor: not-allowed; }
+    .shop-btn.equip { background: #f0eaff; color: #6d28d9; border: 1.5px solid #e0d0ff; }
+    .shop-btn.unequip { background: #6d28d9; color: #fff; }
+
+    /* ── SUMMARY TAB ── */
+    #tabSummary {
+      display: none; flex-direction: column; gap: 10px;
+      flex: 1; overflow-y: auto;
+    }
+    #tabSummary::-webkit-scrollbar { width: 3px; }
+    #tabSummary::-webkit-scrollbar-thumb { background: #eee; border-radius: 2px; }
+
+    .summary-date {
+      font-size: 11px; font-weight: 600; color: #bbb;
+      text-align: center; letter-spacing: 0.03em;
+    }
+
+    .summary-hero {
+      text-align: center; padding: 4px 0 2px;
+    }
+    .summary-hero-num {
+      font-size: 38px; font-weight: 800; color: #111;
+      letter-spacing: -0.04em; line-height: 1;
+    }
+    .summary-hero-num .unit {
+      font-size: 15px; font-weight: 600; color: #888;
+      letter-spacing: 0; margin: 0 2px;
+    }
+    .summary-hero-label { font-size: 11px; color: #bbb; font-weight: 600; margin-top: 4px; }
+
+    .summary-stats {
+      display: flex; gap: 8px;
+    }
+    .stat-card {
+      flex: 1; background: #f5f5f7; border-radius: 12px;
+      padding: 10px 8px; display: flex; flex-direction: column;
+      align-items: center; gap: 3px;
+    }
+    .stat-card svg { color: #6d28d9; }
+    .stat-num { font-size: 18px; font-weight: 800; color: #111; line-height: 1; }
+    .stat-label { font-size: 10px; color: #999; font-weight: 600; }
+
+    .cat-bubble {
+      display: flex; align-items: center; gap: 10px;
+      background: #f5f5f7; border-radius: 14px; padding: 10px 12px;
+    }
+    .bubble-cat { width: 40px; height: 40px; object-fit: contain; mix-blend-mode: multiply; flex-shrink: 0; }
+    .bubble-wrap { flex: 1; }
+    .bubble-text { font-size: 12px; color: #444; font-weight: 500; line-height: 1.5; }
+
+    .week-section { display: flex; flex-direction: column; gap: 8px; }
+    .week-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: #bbb;
+      display: flex; align-items: center; gap: 5px;
+    }
+
+    .week-chart {
+      display: flex; align-items: flex-end; gap: 5px; height: 70px;
+    }
+    .week-col {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; gap: 4px; height: 100%;
+    }
+    .week-bar-wrap {
+      flex: 1; width: 100%; display: flex; align-items: flex-end;
+    }
+    .week-bar {
+      width: 100%; border-radius: 4px 4px 0 0;
+      min-height: 3px; transition: height 0.4s ease;
+      background: #e8e0ff;
+    }
+    .week-bar.today { background: #6d28d9; }
+    .week-bar.empty { background: #f0f0f0; }
+    .week-day {
+      font-size: 10px; font-weight: 600; color: #bbb;
+      line-height: 1;
+    }
+    .week-day.today { color: #6d28d9; }
+
+    /* ── SUMMARY EXTRA ── */
+    .sec-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: #bbb;
+      display: flex; align-items: center; gap: 5px; margin-bottom: 6px;
+    }
+
+    /* mini stat cards (same height as stat-card but smaller nums) */
+    .mini-stats { display: flex; gap: 8px; }
+    .mini-card {
+      flex: 1; background: #f5f5f7; border-radius: 12px;
+      padding: 9px 8px; display: flex; flex-direction: column;
+      align-items: center; gap: 2px;
+    }
+    .mini-num  { font-size: 15px; font-weight: 800; color: #111; line-height: 1; }
+    .mini-unit { font-size: 9px; font-weight: 600; color: #aaa; }
+
+    /* task breakdown */
+    .task-bar-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .task-bar-name {
+      width: 54px; font-size: 11px; font-weight: 600; color: #444;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;
+    }
+    .task-bar-track {
+      flex: 1; height: 7px; background: #f0f0f0; border-radius: 99px; overflow: hidden;
+    }
+    .task-bar-fill {
+      height: 100%; border-radius: 99px; background: #6d28d9;
+      transition: width 0.5s ease;
+    }
+    .task-bar-mins {
+      font-size: 10px; color: #bbb; font-weight: 600;
+      flex-shrink: 0; min-width: 28px; text-align: right;
+    }
+
+    /* hourly chart */
+    .hour-chart { display: flex; align-items: flex-end; gap: 3px; height: 54px; }
+    .hour-col {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%;
+    }
+    .hour-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+    .hour-bar {
+      width: 100%; border-radius: 3px 3px 0 0; min-height: 2px;
+      background: #ede9fe;
+    }
+    .hour-bar.peak { background: #6d28d9; }
+    .hour-bar.mid  { background: #a78bfa; }
+    .hour-label { font-size: 8px; color: #ccc; font-weight: 600; line-height: 1; }
+    .hour-label.marked { color: #9ca3af; }
+
+    /* ── PROFILE TAB ── */
+    #tabProfile {
+      display: none; flex-direction: column; gap: 10px;
+      flex: 1; overflow-y: auto;
+    }
+    #tabProfile::-webkit-scrollbar { width: 3px; }
+    #tabProfile::-webkit-scrollbar-thumb { background: #eee; border-radius: 2px; }
+
+    /* auth */
+    .auth-hero { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; }
+    .auth-hero-text {}
+    .auth-title { font-size: 14px; font-weight: 700; color: #111; }
+    .auth-sub { font-size: 11px; color: #999; margin-top: 2px; }
+    .auth-toggle {
+      display: flex; background: #f5f5f7; border-radius: 10px; padding: 3px; gap: 2px;
+    }
+    .auth-tab-btn {
+      flex: 1; border: none; background: transparent; border-radius: 8px;
+      font-size: 12px; font-weight: 600; color: #888; padding: 6px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .auth-tab-btn.active { background: white; color: #111; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .auth-form { display: flex; flex-direction: column; gap: 8px; }
+    .auth-input {
+      border: 1.5px solid #e8e8e8; border-radius: 10px;
+      padding: 10px 12px; font-size: 13px; outline: none;
+      transition: border-color 0.2s; background: #fafafa;
+    }
+    .auth-input:focus { border-color: #6d28d9; background: white; }
+    .auth-error { font-size: 11px; color: #ef4444; min-height: 14px; }
+    .auth-submit-btn {
+      background: #6d28d9; color: white; border: none;
+      border-radius: 10px; padding: 11px; font-size: 13px;
+      font-weight: 700; cursor: pointer; transition: opacity 0.2s;
+    }
+    .auth-submit-btn:hover { opacity: 0.88; }
+    .auth-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* profile */
+    .profile-header {
+      display: flex; align-items: center; gap: 10px;
+      background: #f5f5f7; border-radius: 14px; padding: 12px;
+    }
+    .profile-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: #ede9fe; display: flex; align-items: center;
+      justify-content: center; font-size: 20px; flex-shrink: 0;
+    }
+    .profile-info { flex: 1; min-width: 0; }
+    .profile-email { font-size: 12px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .profile-level-badge {
+      display: inline-block; margin-top: 3px;
+      background: #ede9fe; color: #6d28d9;
+      font-size: 10px; font-weight: 700;
+      padding: 2px 7px; border-radius: 20px;
+    }
+    .logout-btn {
+      border: none; background: #eee; border-radius: 8px;
+      width: 30px; height: 30px; display: flex; align-items: center;
+      justify-content: center; cursor: pointer; color: #666;
+      flex-shrink: 0;
+    }
+    .logout-btn:hover { background: #fde8e8; color: #ef4444; }
+
+    /* level card */
+    .level-card {
+      background: linear-gradient(135deg, #6d28d9, #9333ea);
+      border-radius: 14px; padding: 14px 16px; color: white;
+    }
+    .level-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+    .level-num { font-size: 22px; font-weight: 800; line-height: 1; }
+    .level-name { font-size: 11px; opacity: 0.8; margin-top: 3px; }
+    .level-pts { font-size: 11px; opacity: 0.85; text-align: right; }
+    .level-pts-sep, .level-pts-unit { opacity: 0.7; }
+    .level-bar-wrap { background: rgba(255,255,255,0.25); border-radius: 99px; height: 6px; }
+    .level-bar-fill { background: white; border-radius: 99px; height: 100%; transition: width 0.6s ease; }
+
+    /* pts stats */
+    .pts-stats { display: flex; gap: 8px; }
+    .pts-stat-card {
+      flex: 1; background: #f5f5f7; border-radius: 12px;
+      padding: 10px 8px; text-align: center;
+    }
+    .pts-stat-num { font-size: 18px; font-weight: 800; color: #111; }
+    .pts-stat-label { font-size: 10px; color: #999; font-weight: 600; margin-top: 2px; }
+
+    /* sync */
+    .sync-row {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; color: #999;
+    }
+    .sync-btn {
+      margin-left: auto; border: none; background: #f0eaff;
+      color: #6d28d9; font-size: 11px; font-weight: 700;
+      padding: 4px 10px; border-radius: 8px; cursor: pointer;
+    }
+    .sync-btn:hover { background: #ede9fe; }
+
+    /* history */
+    .pts-history-title {
+      font-size: 10px; font-weight: 700; color: #bbb;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .pts-history-list { display: flex; flex-direction: column; gap: 6px; }
+    .history-item {
+      display: flex; align-items: center; gap: 10px;
+      background: #f5f5f7; border-radius: 10px; padding: 8px 10px;
+    }
+    .history-icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: #ede9fe; display: flex; align-items: center;
+      justify-content: center; flex-shrink: 0;
+    }
+    .history-name { font-size: 12px; font-weight: 600; color: #111; flex: 1; }
+    .history-meta { font-size: 10px; color: #999; }
+    .history-pts { font-size: 13px; font-weight: 800; color: #6d28d9; }
+
+    /* ── TIMELINE ── */
+    .timeline-list { display: flex; flex-direction: column; gap: 0; }
+    .tl-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 6px 0; position: relative;
+    }
+    .tl-item:not(:last-child)::before {
+      content: ''; position: absolute;
+      left: 11px; top: 22px; bottom: -6px;
+      width: 1px; background: #f0f0f0;
+    }
+    .tl-dot {
+      width: 22px; height: 22px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+    .tl-dot.focused    { background: #f0fdf4; color: #16a34a; }
+    .tl-dot.distracted { background: #fef2f2; color: #dc2626; }
+    .tl-body { flex: 1; min-width: 0; }
+    .tl-activity {
+      font-size: 12px; font-weight: 600; color: #111;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tl-activity.distracted { color: #dc2626; }
+    .tl-time { font-size: 10px; color: #bbb; margin-top: 1px; }
+    .tl-empty { font-size: 12px; color: #ccc; text-align: center; padding: 12px 0; }
+
+    /* ── PLAN / SUBSCRIPTION ── */
+    .plan-section-wrap { display: flex; flex-direction: column; gap: 8px; }
+    .plan-row {
+      display: flex; align-items: center; gap: 8px;
+      background: #f5f5f7; border-radius: 12px; padding: 10px 12px;
+    }
+    .plan-badge {
+      font-size: 10px; font-weight: 800; letter-spacing: 0.06em;
+      padding: 3px 8px; border-radius: 20px; flex-shrink: 0;
+    }
+    .plan-badge.free  { background: #e8e8e8; color: #888; }
+    .plan-badge.light { background: #dbeafe; color: #1d4ed8; }
+    .plan-badge.pro   { background: linear-gradient(90deg, #6d28d9, #9333ea); color: white; }
+    .plan-badge.power { background: linear-gradient(90deg, #d97706, #f59e0b); color: white; }
+    .plan-row-text { flex: 1; min-width: 0; }
+    .plan-row-title { font-size: 12px; font-weight: 700; color: #111; }
+    .plan-row-sub   { font-size: 10px; color: #999; margin-top: 1px; }
+    .plan-action-btn {
+      border: none; border-radius: 9px; font-size: 11px; font-weight: 700;
+      cursor: pointer; font-family: inherit; white-space: nowrap; flex-shrink: 0;
+      padding: 6px 12px; transition: opacity 0.15s;
+    }
+    .plan-action-btn.upgrade { background: #111; color: #fff; }
+    .plan-action-btn.upgrade:hover { opacity: 0.78; }
+    .plan-action-btn.manage  { background: #ede9fe; color: #6d28d9; }
+    .plan-action-btn.manage:hover  { background: #e0d9ff; }
+
+    /* quota bar */
+    .quota-block {
+      background: #f5f5f7; border-radius: 12px; padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .quota-top {
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .quota-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.06em; }
+    .quota-nums  { font-size: 11px; color: #999; }
+    .quota-nums strong { color: #111; font-weight: 700; }
+    .quota-track {
+      height: 6px; background: #e8e8e8; border-radius: 99px; overflow: hidden;
+    }
+    .quota-fill {
+      height: 100%; border-radius: 99px;
+      background: #6d28d9;
+      transition: width 0.5s ease;
+    }
+    .quota-fill.warn  { background: #f59e0b; }
+    .quota-fill.danger{ background: #ef4444; }
+    .quota-fill.empty { background: #d1d5db; }
+    .quota-bottom {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .quota-remaining { font-size: 11px; font-weight: 600; color: #555; }
+    .quota-remaining.warn   { color: #d97706; }
+    .quota-remaining.danger { color: #dc2626; }
+    .quota-upgrade-hint {
+      font-size: 10px; color: #6d28d9; font-weight: 700; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .quota-upgrade-hint:hover { opacity: 0.7; }
+
+    /* active view quota pill */
+    .active-quota {
+      font-size: 10px; font-weight: 600; color: #aaa;
+      margin-bottom: 4px; display: none;
+    }
+    .active-quota.warn   { color: #d97706; display: block; }
+    .active-quota.danger { color: #dc2626; display: block; }
+
+    /* no-quota warning on start */
+    .quota-warn-banner {
+      display: none; align-items: center; gap: 7px;
+      background: #fef2f2; border-radius: 10px; padding: 8px 12px;
+      font-size: 11px; color: #dc2626; font-weight: 600;
+    }
+    .quota-warn-banner.visible { display: flex; }
+
+    /* ── ACTIVE VIEW ── */
+    #viewActive {
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; padding: 28px; position: relative;
+    }
+
+    .active-topbar { position: absolute; top: 10px; right: 14px; }
+
+    .pulse-dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #6d28d9;
+      animation: pulse 1.8s ease-in-out infinite;
+      display: inline-block; margin-right: 5px; flex-shrink: 0;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.65); }
+    }
+
+    .active-badge { font-size: 12px; font-weight: 700; color: #555; margin-bottom: 20px; display: flex; align-items: center; gap: 6px; }
+    .active-cat { width: 80px; height: 80px; object-fit: contain; mix-blend-mode: multiply; margin-bottom: 14px; }
+    .active-task-name { font-size: 20px; font-weight: 800; color: #111; text-align: center; margin-bottom: 6px; letter-spacing: -0.02em; max-width: 300px; word-break: break-word; }
+    .active-duration-label { font-size: 11px; color: #888; font-weight: 500; margin-bottom: 18px; display: flex; align-items: center; gap: 4px; }
+    .active-timer { font-size: 50px; font-weight: 800; color: #111; letter-spacing: -0.04em; line-height: 1; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+
+    .active-progress-track { width: 180px; height: 4px; background: rgba(0,0,0,0.1); border-radius: 2px; margin-bottom: 24px; overflow: hidden; }
+    .active-progress-fill { height: 100%; background: #6d28d9; border-radius: 2px; transition: width 1s linear; width: 0%; }
+
+    .active-hint { font-size: 11px; color: #888; font-weight: 500; margin-bottom: 20px; background: rgba(0,0,0,0.07); border-radius: 8px; padding: 4px 10px; display: flex; align-items: center; gap: 5px; }
+    .active-hint kbd { font-family: inherit; font-weight: 700; color: #555; }
+
+    .distract-indicator {
+      display: flex; align-items: center; gap: 6px;
+      border-radius: 20px; padding: 4px 12px;
+      font-size: 11px; font-weight: 700;
+      margin-bottom: 8px; transition: all 0.3s ease;
+      opacity: 0;
+    }
+    .distract-indicator.visible { opacity: 1; }
+    .distract-indicator.ok     { background: #f0fdf4; color: #16a34a; }
+    .distract-indicator.warn   { background: #fefce8; color: #ca8a04; }
+    .distract-indicator.danger { background: #fff7ed; color: #ea580c; }
+    .distract-indicator.alarm  { background: #fef2f2; color: #dc2626; }
+    .distract-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0;
+    }
+
+    .end-btn {
+      padding: 12px 36px; background: #111; border: none; border-radius: 12px;
+      color: #fff; font-size: 14px; font-weight: 700;
+      cursor: pointer; transition: opacity 0.15s, transform 0.1s; font-family: inherit;
+      display: flex; align-items: center; gap: 7px;
+    }
+    .end-btn:hover { opacity: 0.8; }
+    .end-btn:active { transform: scale(0.97); }
+  </style>
+</head>
+<body>
+
+  <!-- ── IDLE VIEW ── -->
+  <div id="viewIdle">
+    <div class="topbar">
+      <button class="close-btn" id="closeBtn">
+        <i data-lucide="x" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+
+    <div class="hero">
+      <div class="hero-text">
+        <div class="badge">
+          <i data-lucide="paw-print" style="width:12px;height:12px"></i>
+          专注模式
+        </div>
+        <div class="heading">今天要<em>做什么</em>？</div>
+        <div class="subtext">告诉猫咪，它会帮你盯着</div>
+      </div>
+      <img class="hero-img" src="../assets/cat-sitsit.png" alt="cat" />
+    </div>
+
+    <div class="card">
+
+      <!-- stats -->
+      <div class="stats-bar">
+        <span>今日</span>
+        <span class="stats-num" id="sessionCount">0</span>
+        <span>次</span>
+        <span class="stats-dot">·</span>
+        <span class="stats-num" id="totalMins">0</span>
+        <span>分钟</span>
+        <div class="stats-points">
+          <i data-lucide="star" style="width:12px;height:12px"></i>
+          <span id="pointsDisplay">0</span>
+        </div>
+      </div>
+
+      <!-- tabs -->
+      <div class="tab-bar">
+        <button class="tab active" data-tab="tasks">
+          <i data-lucide="list-todo" style="width:13px;height:13px"></i>
+          任务
+        </button>
+        <button class="tab" data-tab="shop">
+          <i data-lucide="shopping-bag" style="width:13px;height:13px"></i>
+          商店
+        </button>
+        <button class="tab" data-tab="summary">
+          <i data-lucide="bar-chart-2" style="width:13px;height:13px"></i>
+          总结
+        </button>
+        <button class="tab" data-tab="profile">
+          <i data-lucide="user" style="width:13px;height:13px"></i>
+          我的
+        </button>
+      </div>
+
+      <!-- tasks tab -->
+      <div id="tabTasks">
+        <div>
+          <div class="sec-header">
+            <span class="field-label">今日任务</span>
+            <button class="add-btn" id="addTaskBtn">
+              <i data-lucide="plus" style="width:12px;height:12px"></i>
+              添加
+            </button>
+          </div>
+          <div class="add-input-row" id="addInputRow">
+            <input id="newTaskInput" placeholder="输入任务名称..." maxlength="50" autocomplete="off" />
+            <button id="confirmAddBtn">
+              <i data-lucide="check" style="width:14px;height:14px"></i>
+            </button>
+          </div>
+          <div class="task-list" id="taskList"></div>
+        </div>
+
+        <div>
+          <div class="field-label" style="margin-bottom:5px">专注于</div>
+          <input class="focus-name-input" id="focusName" type="text" placeholder="选择或输入任务..." autocomplete="off" maxlength="60" />
+        </div>
+
+        <div>
+          <div class="field-label" style="margin-bottom:5px">计划时长</div>
+          <div class="chips" id="chips">
+            <div class="chip" data-value="25">25 分钟</div>
+            <div class="chip" data-value="45">45 分钟</div>
+            <div class="chip" data-value="60">1 小时</div>
+            <div class="chip" data-value="90">90 分钟</div>
+            <div class="chip" data-value="custom">自定义</div>
+          </div>
+          <div class="custom-row" id="customRow">
+            <input type="number" id="customMin" min="1" max="480" placeholder="60" />
+            <span>分钟</span>
+          </div>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="quota-warn-banner" id="quotaWarnBanner">
+          <i data-lucide="alert-circle" style="width:13px;height:13px;flex-shrink:0"></i>
+          <span id="quotaWarnText">本月 AI 检测额度已用完</span>
+          <button class="plan-action-btn upgrade" id="quotaUpgradeBtn" style="margin-left:auto;padding:4px 10px;font-size:10px">升级</button>
+        </div>
+        <button class="start-btn" id="startBtn" disabled>
+          <i data-lucide="play" style="width:15px;height:15px"></i>
+          开始专注
+        </button>
+      </div>
+
+      <!-- summary tab -->
+      <div id="tabSummary">
+        <div class="summary-date" id="summaryDate"></div>
+
+        <div class="summary-hero">
+          <div class="summary-hero-num" id="summaryHeroNum">0<span class="unit">分钟</span></div>
+          <div class="summary-hero-label">今日专注时长</div>
+        </div>
+
+        <div class="summary-stats">
+          <div class="stat-card">
+            <i data-lucide="zap" style="width:14px;height:14px"></i>
+            <div class="stat-num" id="sumSessions">0</div>
+            <div class="stat-label">次专注</div>
+          </div>
+          <div class="stat-card">
+            <i data-lucide="check-circle-2" style="width:14px;height:14px"></i>
+            <div class="stat-num" id="sumTasks">0</div>
+            <div class="stat-label">个任务</div>
+          </div>
+          <div class="stat-card">
+            <i data-lucide="star" style="width:14px;height:14px"></i>
+            <div class="stat-num" id="sumPoints">0</div>
+            <div class="stat-label">积分</div>
+          </div>
+        </div>
+
+        <div class="cat-bubble">
+          <img class="bubble-cat" src="../assets/cat-sitsit.png" alt="cat" />
+          <div class="bubble-wrap">
+            <div class="bubble-text" id="catMessage">喵～</div>
+          </div>
+        </div>
+
+        <div class="week-section">
+          <div class="week-title">
+            <i data-lucide="calendar-days" style="width:12px;height:12px"></i>
+            本周专注记录
+          </div>
+          <div class="week-chart" id="weekChart"></div>
+        </div>
+
+        <div>
+          <div class="sec-title">
+            <i data-lucide="clock-3" style="width:11px;height:11px"></i>
+            今日时段分布
+          </div>
+          <div class="hour-chart" id="hourChart"></div>
+        </div>
+
+        <div>
+          <div class="sec-title">
+            <i data-lucide="layout-list" style="width:11px;height:11px"></i>
+            任务分布
+          </div>
+          <div style="display:flex;flex-direction:column;gap:7px" id="taskBreakdown"></div>
+        </div>
+
+        <div>
+          <div class="sec-title">
+            <i data-lucide="scroll-text" style="width:11px;height:11px"></i>
+            今日活动时间线
+          </div>
+          <div class="timeline-list" id="timelineList">
+            <div class="tl-empty">完成一次专注后自动生成</div>
+          </div>
+        </div>
+
+        <div class="mini-stats" id="miniStats">
+          <div class="mini-card">
+            <div class="mini-num" id="sumAvg">—</div>
+            <div class="mini-unit">平均时长</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-num" id="sumBest">—</div>
+            <div class="mini-unit">最长专注</div>
+          </div>
+          <div class="mini-card">
+            <div class="mini-num" id="sumStreak">—</div>
+            <div class="mini-unit">连续天数</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- profile tab -->
+      <div id="tabProfile">
+
+        <!-- 未登录 -->
+        <div id="authPanel" style="display:flex;flex-direction:column;gap:12px">
+          <div class="auth-hero">
+            <img class="bubble-cat" src="../assets/cat-sitsit.png" style="width:52px;height:52px;mix-blend-mode:multiply" />
+            <div class="auth-hero-text">
+              <div class="auth-title">登录同步数据</div>
+              <div class="auth-sub">积分、记录跨设备保存</div>
+            </div>
+          </div>
+
+          <div class="auth-toggle">
+            <button class="auth-tab-btn active" id="loginTabBtn">登录</button>
+            <button class="auth-tab-btn" id="registerTabBtn">注册</button>
+          </div>
+
+          <div class="auth-form" id="authForm">
+            <input class="auth-input" id="authEmail" type="email" placeholder="邮箱地址" autocomplete="off" />
+            <input class="auth-input" id="authPassword" type="password" placeholder="密码（6位以上）" />
+            <div class="auth-error" id="authError"></div>
+            <button class="auth-submit-btn" id="authSubmitBtn">登录</button>
+          </div>
+        </div>
+
+        <!-- 已登录 -->
+        <div id="profilePanel" style="display:none;flex-direction:column;gap:10px">
+          <div class="profile-header">
+            <div class="profile-avatar" id="profileAvatar">🐱</div>
+            <div class="profile-info">
+              <div class="profile-email" id="profileEmail">user@example.com</div>
+              <div class="profile-level-badge" id="profileLevelBadge">见习监工</div>
+            </div>
+            <button class="logout-btn" id="logoutBtn">
+              <i data-lucide="log-out" style="width:13px;height:13px"></i>
+            </button>
+          </div>
+
+          <!-- 积分 + 等级进度 -->
+          <div class="level-card">
+            <div class="level-card-top">
+              <div>
+                <div class="level-num" id="levelNum">Lv.1</div>
+                <div class="level-name" id="levelName">见习监工</div>
+              </div>
+              <div class="level-pts">
+                <span id="levelPtsCurrent">0</span>
+                <span class="level-pts-sep"> / </span>
+                <span id="levelPtsNext">100</span>
+                <span class="level-pts-unit"> 分</span>
+              </div>
+            </div>
+            <div class="level-bar-wrap">
+              <div class="level-bar-fill" id="levelBarFill" style="width:0%"></div>
+            </div>
+          </div>
+
+          <!-- 订阅方案 -->
+          <div id="planSection"></div>
+
+          <!-- 积分统计 -->
+          <div class="pts-stats">
+            <div class="pts-stat-card">
+              <div class="pts-stat-num" id="totalPts">0</div>
+              <div class="pts-stat-label">累计积分</div>
+            </div>
+            <div class="pts-stat-card">
+              <div class="pts-stat-num" id="totalSessions">0</div>
+              <div class="pts-stat-label">专注次数</div>
+            </div>
+            <div class="pts-stat-card">
+              <div class="pts-stat-num" id="totalMinsProfile">0</div>
+              <div class="pts-stat-label">专注分钟</div>
+            </div>
+          </div>
+
+          <!-- 同步状态 -->
+          <div class="sync-row" id="syncRow">
+            <i data-lucide="cloud" style="width:12px;height:12px"></i>
+            <span id="syncStatus">数据已同步</span>
+            <button class="sync-btn" id="syncBtn">立即同步</button>
+          </div>
+
+          <!-- 积分记录 -->
+          <div class="pts-history-title">
+            <i data-lucide="clock" style="width:11px;height:11px"></i>
+            最近记录
+          </div>
+          <div class="pts-history-list" id="ptsHistoryList"></div>
+        </div>
+
+      </div>
+
+      <!-- shop tab -->
+      <div id="tabShop">
+        <div class="shop-header">
+          <div class="shop-header-icon">
+            <i data-lucide="star" style="width:18px;height:18px"></i>
+          </div>
+          <div>
+            <div class="shop-points-num"><span id="shopPoints">0</span> 积分</div>
+            <div class="shop-points-label">完成专注获得</div>
+          </div>
+          <div class="shop-points-hint">每分钟 +1 分<br>装备道具给猫咪</div>
+        </div>
+        <div class="shop-list" id="shopList"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── ACTIVE VIEW ── -->
+  <div id="viewActive">
+    <div class="active-topbar">
+      <button class="close-btn" id="closeBtn2">
+        <i data-lucide="x" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+    <div class="active-badge">
+      <span class="pulse-dot"></span>
+      专注中
+    </div>
+    <img class="active-cat" src="../assets/cat-sitsit.png" alt="cat" />
+    <div class="active-task-name" id="activeTaskName">-</div>
+    <div class="active-duration-label" id="activeDurationLabel">
+      <i data-lucide="clock" style="width:12px;height:12px"></i>
+      <span id="activeDurationText"></span>
+    </div>
+    <div class="active-timer" id="activeTimer">00:00</div>
+    <div class="active-progress-track">
+      <div class="active-progress-fill" id="progressFill"></div>
+    </div>
+    <div class="active-quota" id="activeQuota">本月剩余 — 小时 AI 检测</div>
+    <div class="distract-indicator" id="distractIndicator">
+      <div class="distract-dot"></div>
+      <span id="distractText">专注中</span>
+    </div>
+    <div class="active-hint">
+      <i data-lucide="keyboard" style="width:12px;height:12px"></i>
+      <kbd>⌘⇧K</kbd> 呼唤猫咪到你身边
+    </div>
+    <button class="end-btn" id="endBtn">
+      <i data-lucide="square-check" style="width:15px;height:15px"></i>
+      结束专注
+    </button>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
